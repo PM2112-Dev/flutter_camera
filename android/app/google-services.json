@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "842499541723",
+    "project_id": "therma-92d11",
+    "storage_bucket": "therma-92d11.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:842499541723:android:3089a2ff6bc7e2b8179afe",
+        "android_client_info": {
+          "package_name": "com.example.thermal_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBff6VUUMvCDkg6IpfVURx2rU9amDFS4vU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,287 @@
+import 'dart:io';
+
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_camera/data/network/api/user_token_api_service.dart';
+import 'package:flutter_camera/data/local/preference/auth_local_preference.dart';
+import 'package:flutter_camera/domain/model/user.dart';
+import 'package:injectable/injectable.dart';
+
+// Background message handler - phải là top-level function
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  print('📨 Firebase: Background message received');
+  print('📨 Firebase: messageId: ${message.messageId}');
+  print('📨 Firebase: Title: ${message.notification?.title}');
+  print('📨 Firebase: Body: ${message.notification?.body}');
+  print('📨 Firebase: Data: ${message.data}');
+}
+
+@singleton
+class FirebaseMessagingService {
+  FirebaseMessaging? _messaging;
+  final UserTokenApiService _userTokenApi;
+  final AuthLocalPreference _authPreference;
+
+  String? _fcmToken;
+  bool _isInitialized = false;
+  User? _currentUser;
+
+  FirebaseMessagingService(this._userTokenApi, this._authPreference);
+
+  FirebaseMessaging get messaging {
+    if (_messaging == null) {
+      throw Exception(
+        'Firebase messaging not initialized. Call initialize() first.',
+      );
+    }
+    return _messaging!;
+  }
+
+  String? get fcmToken => _fcmToken;
+  bool get isInitialized => _isInitialized;
+  User? get currentUser => _currentUser;
+
+  Future<void> initialize() async {
+    try {
+      print('🔥 Firebase: Initializing messaging...');
+
+      // Initialize Firebase Messaging instance
+      _messaging = FirebaseMessaging.instance;
+      print('🔥 Firebase: Messaging instance created');
+
+      // Set background message handler
+      FirebaseMessaging.onBackgroundMessage(
+        _firebaseMessagingBackgroundHandler,
+      );
+      print('🔥 Firebase: Background handler registered');
+
+      // Request permission for notifications
+      NotificationSettings settings = await messaging.requestPermission(
+        alert: true,
+        announcement: false,
+        badge: true,
+        carPlay: false,
+        criticalAlert: false,
+        provisional: false,
+        sound: true,
+      );
+
+      print('📱 Firebase: Permission status: ${settings.authorizationStatus}');
+
+      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+        await _setupToken();
+        await _setupMessageHandlers();
+        _isInitialized = true;
+        print('✅ Firebase: Messaging initialization complete');
+      } else {
+        print('❌ Firebase: Permission denied');
+      }
+    } catch (e) {
+      print('❌ Firebase: Initialization error: $e');
+    }
+  }
+
+  Future<void> _setupToken() async {
+    try {
+      print('🔑 Firebase: Getting FCM token...');
+      _fcmToken = await messaging.getToken();
+      print('🔑 Firebase: FCM Token received: $_fcmToken');
+      print('📋 Firebase: Token length: ${_fcmToken?.length ?? 0} characters');
+
+      if (_fcmToken != null) {
+        print('📤 Firebase: Registering token with server...');
+        await _sendTokenToServer();
+      } else {
+        print('⚠️ Firebase: FCM Token is null!');
+      }
+
+      // Listen for token refresh
+      messaging.onTokenRefresh.listen((String token) async {
+        print('🔄 Firebase: Token refreshed: $token');
+        print('📋 Firebase: New token length: ${token.length} characters');
+        _fcmToken = token;
+        await _sendTokenToServer();
+      });
+    } catch (e) {
+      print('❌ Firebase: Token setup error: $e');
+    }
+  }
+
+  Future<void> _sendTokenToServer() async {
+    if (_fcmToken == null) return;
+
+    try {
+      final tokens = _authPreference.getTokens();
+      if (tokens?.accessToken == null) {
+        print(
+          '⚠️ Firebase: No auth token available, skipping server registration',
+        );
+        return;
+      }
+
+      // Use current user ID if available, otherwise skip registration
+      if (_currentUser == null) {
+        print(
+          '⚠️ Firebase: No current user available, skipping server registration',
+        );
+        return;
+      }
+
+      
+
+      final success = await _userTokenApi.postUserToken(
+        userId: _currentUser!.id.toString(),
+        deviceType: Platform.isAndroid ? "android" : "ios",
+        token: _fcmToken!,
+        areaIds: [],
+        isAdmin: _currentUser!.roleNames.toLowerCase().contains('admin'),
+        authToken: tokens?.accessToken ?? '',
+      );
+
+      if (success) {
+        print(
+          '✅ Firebase: Token registered with server successfully for user ${_currentUser!.username}',
+        );
+      } else {
+        print('❌ Firebase: Failed to register token with server');
+      }
+    } catch (e) {
+      print('❌ Firebase: Error sending token to server: $e');
+    }
+  }
+
+  Future<void> _setupMessageHandlers() async {
+    print('📨 Firebase: Setting up message handlers...');
+
+    // Handle message when app is in foreground
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      print('📨 Firebase: Message received (foreground)');
+      print('📨 Firebase: messageId: ${message.messageId}');
+      print('📨 Firebase: From: ${message.from}');
+      print('📨 Firebase: Title: ${message.notification?.title}');
+      print('📨 Firebase: Body: ${message.notification?.body}');
+      print('📨 Firebase: Data: ${message.data}');
+      print('📨 Firebase: Category: ${message.category}');
+      print('📨 Firebase: CollapseKey: ${message.collapseKey}');
+
+      _handleMessage(message);
+    });
+
+    // Handle message when app is opened from notification
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      print('📨 Firebase: Message opened app');
+      print('📨 Firebase: messageId: ${message.messageId}');
+      print('📨 Firebase: Title: ${message.notification?.title}');
+      print('📨 Firebase: Body: ${message.notification?.body}');
+      print('📨 Firebase: Data: ${message.data}');
+
+      _handleMessage(message);
+    });
+
+    // Check if app was opened from a notification (when app was terminated)
+    RemoteMessage? initialMessage = await messaging.getInitialMessage();
+    if (initialMessage != null) {
+      print('📨 Firebase: App opened from notification (terminated state)');
+      print('📨 Firebase: messageId: ${initialMessage.messageId}');
+      _handleMessage(initialMessage);
+    }
+
+    print('✅ Firebase: Message handlers setup complete');
+  }
+
+  void _handleMessage(RemoteMessage message) {
+    // Process notification data
+    // Có thể navigate đến specific screen based on message.data
+
+    if (message.data.containsKey('type')) {
+      switch (message.data['type']) {
+        case 'vision_alert':
+          print('🤖 Handling vision alert notification');
+          // Navigate to AI notifications
+          break;
+        case 'temperature_alert':
+          print('🌡️ Handling temperature alert notification');
+          // Navigate to temperature notifications
+          break;
+        default:
+          print('📨 Handling generic notification');
+      }
+    }
+  }
+
+  Future<void> subscribeToTopic(String topic) async {
+    try {
+      await messaging.subscribeToTopic(topic);
+      print('✅ Firebase: Subscribed to topic: $topic');
+    } catch (e) {
+      print('❌ Firebase: Error subscribing to topic $topic: $e');
+    }
+  }
+
+  Future<void> unsubscribeFromTopic(String topic) async {
+    try {
+      await messaging.unsubscribeFromTopic(topic);
+      print('✅ Firebase: Unsubscribed from topic: $topic');
+    } catch (e) {
+      print('❌ Firebase: Error unsubscribing from topic $topic: $e');
+    }
+  }
+
+  /// Cập nhật thông tin user hiện tại và đăng ký lại FCM token
+  Future<void> updateCurrentUser(User user) async {
+    print(
+      '👤 Firebase: Updating current user to ${user.username} (ID: ${user.id})',
+    );
+    _currentUser = user;
+
+    // Re-register FCM token with new user
+    if (_fcmToken != null) {
+      await _sendTokenToServer();
+    }
+  }
+
+  /// Hủy đăng ký FCM token khi logout
+  Future<void> unregisterToken() async {
+    if (_fcmToken == null) {
+      print('⚠️ Firebase: No FCM token to unregister');
+      return;
+    }
+
+    try {
+      final tokens = _authPreference.getTokens();
+      if (tokens?.accessToken == null) {
+        print('⚠️ Firebase: No auth token available for unregistering');
+        return;
+      }
+
+      print('🗑️ Firebase: Unregistering FCM token...');
+      final success = await _userTokenApi.deleteUserToken(
+        token: _fcmToken!,
+        authToken: tokens?.accessToken ?? '',
+      );
+
+      if (success) {
+        print('✅ Firebase: Token unregistered successfully');
+      } else {
+        print('❌ Firebase: Failed to unregister token');
+      }
+    } catch (e) {
+      print('❌ Firebase: Error unregistering token: $e');
+    } finally {
+      // Clear current user
+      _currentUser = null;
+    }
+  }
+
+  /// Đăng ký lại FCM token cho user mới (sau khi login)
+  Future<void> registerTokenForNewUser(User user) async {
+    print('🔄 Firebase: Registering token for new user ${user.username}');
+    await updateCurrentUser(user);
+  }
+
+  /// Xóa thông tin user hiện tại (khi logout)
+  void clearCurrentUser() {
+    print('🧹 Firebase: Clearing current user');
+    _currentUser = null;
+  }
+}
