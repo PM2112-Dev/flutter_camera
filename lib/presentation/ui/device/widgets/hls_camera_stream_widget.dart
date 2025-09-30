@@ -244,33 +244,15 @@ class _HlsCameraStreamWidgetState extends State<HlsCameraStreamWidget> with Widg
         height: widget.height ?? 200,
         color: Colors.black,
         child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error, color: Colors.red, size: 48),
-                const SizedBox(height: 16),
-                Text(
-                  _error!,
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                  textAlign: TextAlign.center,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      _error = null;
-                      _isLoading = true;
-                    });
-                    _initializeStream();
-                  },
-                  child: const Text('Retry'),
-                ),
-              ],
-            ),
+          child: ElevatedButton(
+            onPressed: () {
+              setState(() {
+                _error = null;
+                _isLoading = true;
+              });
+              _initializeStream();
+            },
+            child: const Text('Retry'),
           ),
         ),
       );

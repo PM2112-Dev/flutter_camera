@@ -141,14 +141,14 @@ class _AppInitializerState extends State<AppInitializer> {
         _currentStreamConfig = streamConfig;
       });
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('All configurations saved successfully'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
+      // if (mounted) {
+      //   ScaffoldMessenger.of(context).showSnackBar(
+      //     const SnackBar(
+      //       content: Text('All configurations saved successfully'),
+      //       backgroundColor: Colors.green,
+      //     ),
+      //   );
+      // }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
