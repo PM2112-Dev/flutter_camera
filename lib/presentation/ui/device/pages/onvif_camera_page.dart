@@ -16,6 +16,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/rendering.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_camera/data/services/ios_image_gallery_service.dart';
 
 class OnvifCameraPage extends StatefulWidget {
   final String cameraName;
@@ -89,6 +90,66 @@ class _OnvifCameraPageState extends State<OnvifCameraPage> {
 
   Future<void> _captureImage() async {
     try {
+      // Show loading
+      _showSnackBar('Đang chụp ảnh...');
+
+      // Add a small delay to ensure widget is rendered
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      if (Platform.isIOS) {
+        // Use native iOS service for better performance and reliability
+        await _captureImageForIOS();
+      } else {
+        // Use GAL for Android
+        await _captureImageForAndroid();
+      }
+    } catch (e) {
+      _showSnackBar('Lỗi khi chụp ảnh: $e');
+    }
+  }
+
+  Future<void> _captureImageForIOS() async {
+    try {
+      // Check permission first
+      final permissionResult = await IosImageGalleryService.checkPermission();
+      if (!permissionResult['isGranted']) {
+        final requestResult = await IosImageGalleryService.requestPermission();
+        if (!requestResult['isGranted']) {
+          _showSnackBar('Cần quyền truy cập thư viện ảnh để lưu ảnh');
+          return;
+        }
+      }
+
+      // Try to capture the video player widget first
+      final Uint8List? imageBytes = await _captureVideoScreenshotBytes();
+
+      if (imageBytes != null) {
+        // Save using native iOS service
+        final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+        final fileName = 'camera_${_cameraName.replaceAll(' ', '_')}_$timestamp.png';
+
+        final result = await IosImageGalleryService.saveImageToGallery(
+          imageData: imageBytes,
+          fileName: fileName,
+        );
+
+        if (result['isSuccess'] == true) {
+          _showSnackBar('Đã lưu ảnh vào thư viện');
+        } else {
+          _showSnackBar('Không thể lưu ảnh: ${result['message']}');
+        }
+      } else {
+        // Fallback: Create a test image
+        _showSnackBar('Đang tạo ảnh test...');
+        await _createTestImageForIOS();
+      }
+    } catch (e) {
+      _showSnackBar('Lỗi khi chụp ảnh iOS: $e');
+    }
+  }
+
+  Future<void> _captureImageForAndroid() async {
+    try {
       // Check if gal has permission
       if (!await Gal.hasAccess()) {
         await Gal.requestAccess();
@@ -97,12 +158,6 @@ class _OnvifCameraPageState extends State<OnvifCameraPage> {
           return;
         }
       }
-
-      // Show loading
-      _showSnackBar('Đang chụp ảnh...');
-
-      // Add a small delay to ensure widget is rendered
-      await Future.delayed(const Duration(milliseconds: 500));
 
       // Try to capture the video player widget
       final String? imagePath = await _captureVideoScreenshot();
@@ -117,7 +172,7 @@ class _OnvifCameraPageState extends State<OnvifCameraPage> {
         await _createTestImage();
       }
     } catch (e) {
-      _showSnackBar('Lỗi khi chụp ảnh: $e');
+      _showSnackBar('Lỗi khi chụp ảnh Android: $e');
     }
   }
 
@@ -156,6 +211,45 @@ class _OnvifCameraPageState extends State<OnvifCameraPage> {
 
       final Uint8List pngBytes = byteData.buffer.asUint8List();
       return await _saveImage(pngBytes);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<Uint8List?> _captureVideoScreenshotBytes() async {
+    try {
+      // Check if key has context
+      if (_videoPlayerKey.currentContext == null) {
+        return null;
+      }
+
+      // Get render object
+      final RenderObject? renderObject = _videoPlayerKey.currentContext!.findRenderObject();
+      if (renderObject == null) {
+        return null;
+      }
+
+      // Check if it's a RepaintBoundary
+      if (renderObject is! RenderRepaintBoundary) {
+        return null;
+      }
+
+      final RenderRepaintBoundary boundary = renderObject;
+
+      // Check if boundary is attached
+      if (!boundary.attached) {
+        return null;
+      }
+
+      // Capture image
+      final ui.Image image = await boundary.toImage(pixelRatio: 2.0);
+      final ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+
+      if (byteData == null) {
+        return null;
+      }
+
+      return byteData.buffer.asUint8List();
     } catch (e) {
       return null;
     }
@@ -241,6 +335,33 @@ class _OnvifCameraPageState extends State<OnvifCameraPage> {
     }
   }
 
+  Future<void> _createTestImageForIOS() async {
+    try {
+      // Create a test image with camera info
+      final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+      final Uint8List? imageBytes = await _createTestImageBytes(timestamp);
+
+      if (imageBytes != null) {
+        final fileName = 'camera_test_${_cameraName.replaceAll(' ', '_')}_$timestamp.png';
+
+        final result = await IosImageGalleryService.saveImageToGallery(
+          imageData: imageBytes,
+          fileName: fileName,
+        );
+
+        if (result['isSuccess'] == true) {
+          _showSnackBar('Đã lưu ảnh test vào thư viện');
+        } else {
+          _showSnackBar('Không thể lưu ảnh test: ${result['message']}');
+        }
+      } else {
+        _showSnackBar('Không thể tạo ảnh test');
+      }
+    } catch (e) {
+      _showSnackBar('Lỗi khi tạo ảnh test iOS: $e');
+    }
+  }
+
   Future<String?> _createTestImageFile(String timestamp) async {
     try {
       // Check permissions
@@ -303,6 +424,104 @@ class _OnvifCameraPageState extends State<OnvifCameraPage> {
       await file.writeAsBytes(byteData.buffer.asUint8List());
 
       return filePath;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<Uint8List?> _createTestImageBytes(String timestamp) async {
+    try {
+      // Create a simple test image (800x600 pixels for better quality)
+      final int width = 800;
+      final int height = 600;
+
+      final ui.PictureRecorder recorder = ui.PictureRecorder();
+      final Canvas canvas = Canvas(recorder);
+
+      // Fill background with dark theme
+      canvas.drawRect(
+        Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()),
+        Paint()..color = const Color(0xFF1a1a1a),
+      );
+
+      // Add a border
+      canvas.drawRect(
+        Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()),
+        Paint()
+          ..color = const Color(0xFF333333)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2,
+      );
+
+      // Draw camera icon (simple representation)
+      final Paint iconPaint = Paint()..color = const Color(0xFF4CAF50);
+      canvas.drawCircle(Offset(width * 0.5, height * 0.3), 40, iconPaint);
+
+      // Draw camera lens
+      canvas.drawCircle(
+        Offset(width * 0.5, height * 0.3),
+        20,
+        Paint()..color = const Color(0xFF2E2E2E),
+      );
+
+      // Draw camera info text
+      final TextPainter textPainter = TextPainter(
+        text: TextSpan(
+          children: [
+            TextSpan(
+              text: '📹 $_cameraName\n',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                height: 1.5,
+              ),
+            ),
+            TextSpan(
+              text: '🕒 ${DateTime.now().toString().split('.')[0]}\n',
+              style: const TextStyle(color: Color(0xFFBBBBBB), fontSize: 18, height: 1.4),
+            ),
+            TextSpan(
+              text: '📍 Camera ID: $_cameraId\n',
+              style: const TextStyle(color: Color(0xFFBBBBBB), fontSize: 16, height: 1.4),
+            ),
+            TextSpan(
+              text: '🎯 Type: $_cameraType\n',
+              style: const TextStyle(color: Color(0xFFBBBBBB), fontSize: 16, height: 1.4),
+            ),
+            TextSpan(
+              text: '⚡ PTZ: ${widget.ptzType}\n',
+              style: const TextStyle(color: Color(0xFFBBBBBB), fontSize: 16, height: 1.4),
+            ),
+          ],
+        ),
+        textDirection: TextDirection.ltr,
+        textAlign: TextAlign.center,
+      );
+      textPainter.layout(maxWidth: width * 0.8);
+      textPainter.paint(canvas, Offset((width - textPainter.width) / 2, height * 0.45));
+
+      // Draw footer
+      final TextPainter footerPainter = TextPainter(
+        text: const TextSpan(
+          text: 'Flutter Camera App',
+          style: TextStyle(color: Color(0xFF666666), fontSize: 14, fontStyle: FontStyle.italic),
+        ),
+        textDirection: TextDirection.ltr,
+      );
+      footerPainter.layout();
+      footerPainter.paint(canvas, Offset((width - footerPainter.width) / 2, height - 40));
+
+      // Convert to image
+      final ui.Picture picture = recorder.endRecording();
+      final ui.Image image = await picture.toImage(width, height);
+      final ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+
+      if (byteData == null) {
+        return null;
+      }
+
+      return byteData.buffer.asUint8List();
     } catch (e) {
       return null;
     }
