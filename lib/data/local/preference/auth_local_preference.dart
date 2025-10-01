@@ -43,10 +43,12 @@ class AuthLocalPreference {
   }
 
   Future<void> clearTokens() async {
+    print('AuthLocalPreference: Clearing all tokens...');
     await _prefs.remove(_accessTokenKey);
     await _prefs.remove(_refreshTokenKey);
     await _prefs.remove(_tokenTypeKey);
     await _prefs.remove(_expiresInKey);
+    print('AuthLocalPreference: All tokens cleared successfully');
   }
 
   bool isLoggedIn() {

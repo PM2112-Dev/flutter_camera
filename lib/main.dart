@@ -142,12 +142,12 @@ class _AppInitializerState extends State<AppInitializer> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('All configurations saved successfully'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        // ScaffoldMessenger.of(context).showSnackBar(
+        //   const SnackBar(
+        //     content: Text('All configurations saved successfully'),
+        //     backgroundColor: Colors.green,
+        //   ),
+        // );
       }
     } catch (e) {
       if (mounted) {

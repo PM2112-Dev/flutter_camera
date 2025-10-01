@@ -64,9 +64,22 @@ class AuthApiService {
 
   Future<ApiResponse<void>> logout() async {
     try {
+      // Get current tokens to include in logout request
+      final tokens = authLocalPreference.getTokens();
+      final headers = <String, String>{'Accept': '*/*'};
+
+      if (tokens?.accessToken != null && tokens!.accessToken.isNotEmpty) {
+        headers['Authorization'] = 'Bearer ${tokens.accessToken}';
+        print(
+          'AuthApiService: Logout with token: ${tokens.accessToken.substring(0, tokens.accessToken.length > 20 ? 20 : tokens.accessToken.length)}...',
+        );
+      } else {
+        print('AuthApiService: Logout without token (no stored tokens)');
+      }
+
       final response = await dio.post(
         '$_baseUrl/api/Auth/logout',
-        options: Options(headers: {'Accept': '*/*'}),
+        options: Options(headers: headers),
       );
 
       return ApiResponse<void>(

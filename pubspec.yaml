@@ -133,7 +133,7 @@ flutter:
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
 icons_launcher:
-  image_path: "assets/icon/icon.png"
+  image_path: "assets/icon/logo.png"
   platforms:
     android:
       enable: true
@@ -142,6 +142,6 @@ icons_launcher:
 
 flutter_native_splash:
   color: "#ffffff"
-  image: assets/icon/icon.png
+  image: assets/icon/splash05.png
   android: true
   ios: true
