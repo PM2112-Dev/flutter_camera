@@ -120,10 +120,10 @@ class _LoginPageState extends State<LoginPage> {
                                       const SizedBox(height: AppSpacing.xl),
                                       CustomTextField(
                                         controller: _usernameController,
-                                        label: 'Email',
+                                        label: 'Tên đăng nhập',
                                         validator: (value) {
                                           if (value == null || value.isEmpty) {
-                                            return 'Vui lòng nhập email';
+                                            return 'Vui lòng nhập tên đăng nhập';
                                           }
                                           return null;
                                         },
