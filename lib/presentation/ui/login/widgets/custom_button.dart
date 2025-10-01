@@ -25,7 +25,6 @@ class CustomButton extends StatelessWidget {
       // Gradient button
       return SizedBox(
         width: double.infinity,
-        height: double.infinity,
         child: Container(
           decoration: BoxDecoration(gradient: gradient, borderRadius: BorderRadius.circular(8)),
           child: ElevatedButton(
