@@ -1,5 +1,7 @@
 import 'package:dartz/dartz.dart';
 import 'package:flutter_camera/data/local/preference/auth_local_preference.dart';
+import 'package:flutter_camera/data/local/preference/selected_cameras_preference.dart';
+import 'package:flutter_camera/data/local/preference/pin_camera_preference.dart';
 import 'package:flutter_camera/data/network/api/auth_api_service.dart';
 import 'package:flutter_camera/data/network/model/auth_tokens_model.dart';
 import 'package:flutter_camera/data/network/model/login_response.dart';
@@ -16,8 +18,15 @@ import 'package:injectable/injectable.dart';
 class AuthRepositoryImpl implements AuthRepository {
   final AuthApiService _apiService;
   final AuthLocalPreference _localPreference;
+  final SelectedCamerasPreference _selectedCamerasPreference;
+  final PinCameraPreference _pinCameraPreference;
 
-  AuthRepositoryImpl(this._apiService, this._localPreference);
+  AuthRepositoryImpl(
+    this._apiService,
+    this._localPreference,
+    this._selectedCamerasPreference,
+    this._pinCameraPreference,
+  );
 
   @override
   Future<Either<Failure, AuthTokens>> login(LoginRequest request) async {
@@ -47,9 +56,7 @@ class AuthRepositoryImpl implements AuthRepository {
       if (response.isSuccess) {
         return const Right(null);
       } else {
-        return Left(
-          ServerFailure(message: response.message ?? 'Logout failed'),
-        );
+        return Left(ServerFailure(message: response.message ?? 'Logout failed'));
       }
     } catch (e) {
       return Left(NetworkFailure('Network error: $e'));
@@ -57,9 +64,7 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<Either<Failure, AuthTokens>> refreshToken(
-    RefreshTokenRequest request,
-  ) async {
+  Future<Either<Failure, AuthTokens>> refreshToken(RefreshTokenRequest request) async {
     try {
       final response = await _apiService.refreshToken(
         accessToken: request.accessToken,
@@ -69,9 +74,7 @@ class AuthRepositoryImpl implements AuthRepository {
       if (response.isSuccess && response.data != null) {
         return Right(response.data!.toEntity());
       } else {
-        return Left(
-          ServerFailure(message: response.message ?? 'Token refresh failed'),
-        );
+        return Left(ServerFailure(message: response.message ?? 'Token refresh failed'));
       }
     } catch (e) {
       return Left(NetworkFailure('Network error: $e'));
@@ -94,9 +97,7 @@ class AuthRepositoryImpl implements AuthRepository {
       if (response.isSuccess && response.data != null) {
         return Right(response.data!.toEntity());
       } else {
-        return Left(
-          ServerFailure(message: response.message ?? 'Failed to get profile'),
-        );
+        return Left(ServerFailure(message: response.message ?? 'Failed to get profile'));
       }
     } catch (e) {
       return Left(NetworkFailure('Network error: $e'));
@@ -109,9 +110,7 @@ class AuthRepositoryImpl implements AuthRepository {
       print(
         'Saving tokens: ${tokens.accessToken.substring(0, tokens.accessToken.length > 20 ? 20 : tokens.accessToken.length)}...',
       );
-      await _localPreference.saveTokens(
-        AuthTokensModelExtension.fromEntity(tokens),
-      );
+      await _localPreference.saveTokens(AuthTokensModelExtension.fromEntity(tokens));
       print('Tokens saved successfully');
       return const Right(null);
     } catch (e) {
@@ -137,9 +136,23 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<Either<Failure, void>> clearTokens() async {
     try {
+      print('🧹 Clearing all user data on logout...');
+
+      // Clear authentication tokens
       await _localPreference.clearTokens();
+      print('✅ Cleared auth tokens');
+
+      // Clear selected cameras
+      await _selectedCamerasPreference.clearSelectedCameras();
+      print('✅ Cleared selected cameras');
+
+      // Clear pinned cameras
+      await _pinCameraPreference.clearAllPinnedCameras();
+      print('✅ Cleared pinned cameras');
+
       return const Right(null);
     } catch (e) {
+      print('❌ Failed to clear data: $e');
       return Left(CacheFailure('Failed to clear tokens: $e'));
     }
   }

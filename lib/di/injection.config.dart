@@ -222,26 +222,16 @@ extension GetItInjectableX on _i174.GetIt {
     gh.factory<_i362.GetNotificationsUseCase>(
       () => _i362.GetNotificationsUseCase(gh<_i819.NotificationsRepository>()),
     );
+    gh.factory<_i470.CameraControlBloc>(
+      () => _i470.CameraControlBloc(gh<_i1006.CameraControlUseCase>()),
+    );
     gh.lazySingleton<_i88.AuthRepository>(
       () => _i162.AuthRepositoryImpl(
         gh<_i531.AuthApiService>(),
         gh<_i183.AuthLocalPreference>(),
+        gh<_i547.SelectedCamerasPreference>(),
+        gh<_i437.PinCameraPreference>(),
       ),
-    );
-    gh.factory<_i597.LogoutUseCase>(
-      () => _i597.LogoutUseCase(gh<_i88.AuthRepository>()),
-    );
-    gh.factory<_i833.RefreshTokenUseCase>(
-      () => _i833.RefreshTokenUseCase(gh<_i88.AuthRepository>()),
-    );
-    gh.factory<_i597.LoginUseCase>(
-      () => _i597.LoginUseCase(gh<_i88.AuthRepository>()),
-    );
-    gh.factory<_i315.GetProfileUseCase>(
-      () => _i315.GetProfileUseCase(gh<_i88.AuthRepository>()),
-    );
-    gh.factory<_i470.CameraControlBloc>(
-      () => _i470.CameraControlBloc(gh<_i1006.CameraControlUseCase>()),
     );
     gh.factory<_i499.GetCameraStreamUsecase>(
       () => _i499.GetCameraStreamUsecase(gh<_i39.CameraStreamRepository>()),
@@ -281,6 +271,21 @@ extension GetItInjectableX on _i174.GetIt {
         authLocalPreference: gh<_i183.AuthLocalPreference>(),
       ),
     );
+    gh.factory<_i840.DeviceBloc>(
+      () => _i840.DeviceBloc(gh<_i203.GetAllTreeUseCase>()),
+    );
+    gh.factory<_i597.LogoutUseCase>(
+      () => _i597.LogoutUseCase(gh<_i88.AuthRepository>()),
+    );
+    gh.factory<_i833.RefreshTokenUseCase>(
+      () => _i833.RefreshTokenUseCase(gh<_i88.AuthRepository>()),
+    );
+    gh.factory<_i597.LoginUseCase>(
+      () => _i597.LoginUseCase(gh<_i88.AuthRepository>()),
+    );
+    gh.factory<_i315.GetProfileUseCase>(
+      () => _i315.GetProfileUseCase(gh<_i88.AuthRepository>()),
+    );
     gh.factory<_i649.AuthBloc>(
       () => _i649.AuthBloc(
         gh<_i597.LoginUseCase>(),
@@ -289,9 +294,6 @@ extension GetItInjectableX on _i174.GetIt {
         gh<_i392.GetStoredTokensUseCase>(),
         gh<_i935.FirebaseMessagingService>(),
       ),
-    );
-    gh.factory<_i840.DeviceBloc>(
-      () => _i840.DeviceBloc(gh<_i203.GetAllTreeUseCase>()),
     );
     return this;
   }
