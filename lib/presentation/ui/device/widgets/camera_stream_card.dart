@@ -45,6 +45,18 @@ class _CameraStreamCardState extends State<CameraStreamCard> with AutomaticKeepA
         widget.camera.status.toUpperCase() == 'ONLINE' ||
         widget.camera.deviceStatus.toUpperCase() == 'ON';
 
+    // Responsive height based on screen size
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    // Calculate video height based on device type
+    // Mobile: 25% of screen height, Tablet/iPad: 30% of screen height
+    final isTablet = screenWidth >= 600;
+    final videoHeight = isTablet
+        ? screenHeight *
+              0.3 // 30% for tablets/iPads
+        : screenHeight * 0.25; // 25% for mobile phones
+
     return Card(
       margin: EdgeInsets.zero,
       elevation: 2,
@@ -58,7 +70,7 @@ class _CameraStreamCardState extends State<CameraStreamCard> with AutomaticKeepA
           children: [
             // Video stream section
             Container(
-              height: 220,
+              height: videoHeight,
               decoration: const BoxDecoration(
                 color: Colors.black,
                 borderRadius: BorderRadius.only(
@@ -79,7 +91,7 @@ class _CameraStreamCardState extends State<CameraStreamCard> with AutomaticKeepA
                           ? HlsCameraStreamWidget(
                               streamId: widget.streamId,
                               width: double.infinity,
-                              height: 220,
+                              height: videoHeight,
                               isLoadingStreamId: widget.isLoadingStreamId,
                             )
                           : _buildVideoPlaceholder(isOnline),

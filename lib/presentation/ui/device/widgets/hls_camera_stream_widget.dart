@@ -261,10 +261,13 @@ class _HlsCameraStreamWidgetState extends State<HlsCameraStreamWidget> with Widg
 
   @override
   Widget build(BuildContext context) {
+    // Use provided height or fallback to responsive height
+    final defaultHeight = widget.height ?? MediaQuery.of(context).size.height * 0.25;
+
     if (_isLoading) {
       return Container(
         width: widget.width,
-        height: widget.height ?? 200,
+        height: defaultHeight,
         color: Colors.black,
         child: const Center(child: CircularProgressIndicator(color: Colors.white)),
       );
@@ -272,7 +275,7 @@ class _HlsCameraStreamWidgetState extends State<HlsCameraStreamWidget> with Widg
     if (_error != null) {
       return Container(
         width: widget.width,
-        height: widget.height ?? 200,
+        height: defaultHeight,
         color: Colors.black,
         child: Center(
           child: ElevatedButton(
@@ -300,7 +303,7 @@ class _HlsCameraStreamWidgetState extends State<HlsCameraStreamWidget> with Widg
     }
     return Container(
       width: widget.width,
-      height: widget.height ?? 200,
+      height: defaultHeight,
       color: Colors.black,
       child: const Center(
         child: Text('No video available', style: TextStyle(color: Colors.white)),

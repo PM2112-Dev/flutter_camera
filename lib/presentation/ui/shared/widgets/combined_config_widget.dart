@@ -113,7 +113,7 @@ class _CombinedConfigWidgetState extends State<CombinedConfigWidget> {
           _buildTextField(
             controller: _streamBaseUrlController,
             label: 'Base URL',
-            hint: 'https://thermal.mtktech.com.vn',
+            hint: 'http://thermal.infosysvietnam.com.vn',
             prefixIcon: Icons.language,
             isUrl: true,
           ),
