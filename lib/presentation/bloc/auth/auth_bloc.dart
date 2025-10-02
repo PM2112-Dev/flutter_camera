@@ -85,7 +85,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   Future<void> _onProfileRequested(ProfileRequested event, Emitter<AuthState> emit) async {
     try {
       print('📡 Getting profile...');
-      
+
       // Add timeout for profile request to prevent hanging
       final result = await _getProfileUseCase().timeout(
         const Duration(seconds: 15),
