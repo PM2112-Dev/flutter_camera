@@ -124,7 +124,7 @@ class AuthLocalPreference {
         return 'http://$baseUrl:$port';
       }
     }
-    return 'https://thermal.mtktech.com.vn:1984'; // Default fallback with HTTPS
+    return 'http://thermal.infosysvietnam.com.vn:1984'; // Default fallback with HTTPS
   }
 
   Future<void> clearStreamServerConfig() async {

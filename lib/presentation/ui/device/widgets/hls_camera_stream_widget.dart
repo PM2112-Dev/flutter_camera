@@ -207,13 +207,13 @@ class _HlsCameraStreamWidgetState extends State<HlsCameraStreamWidget> with Widg
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
 
-    if (_isDisposed || _controller == null) return;
+    if (_isDisposed) return;
 
     switch (state) {
       case AppLifecycleState.paused:
       case AppLifecycleState.inactive:
         // App going to background
-        if (_controller!.value.isPlaying) {
+        if (_controller != null && _controller!.value.isPlaying) {
           _wasPlayingBeforeBackground = true;
           _controller!.pause();
           debugPrint('[HLS] Paused video due to app backgrounding');
@@ -221,10 +221,15 @@ class _HlsCameraStreamWidgetState extends State<HlsCameraStreamWidget> with Widg
         break;
       case AppLifecycleState.resumed:
         // App returning to foreground
-        if (_wasPlayingBeforeBackground && _controller!.value.isInitialized) {
-          _controller!.play();
+        debugPrint('[HLS] App resumed from background');
+
+        if (_wasPlayingBeforeBackground) {
           _wasPlayingBeforeBackground = false;
-          debugPrint('[HLS] Resumed video after app foregrounding');
+
+          // Always reinitialize stream when returning from background
+          // This ensures we get a fresh connection and latest live content
+          debugPrint('[HLS] Reinitializing stream after resume to ensure fresh connection');
+          _initializeStream();
         }
         break;
       case AppLifecycleState.detached:
@@ -233,7 +238,7 @@ class _HlsCameraStreamWidgetState extends State<HlsCameraStreamWidget> with Widg
         break;
       case AppLifecycleState.hidden:
         // App hidden (iOS specific)
-        if (_controller!.value.isPlaying) {
+        if (_controller != null && _controller!.value.isPlaying) {
           _wasPlayingBeforeBackground = true;
           _controller!.pause();
         }
@@ -256,10 +261,13 @@ class _HlsCameraStreamWidgetState extends State<HlsCameraStreamWidget> with Widg
 
   @override
   Widget build(BuildContext context) {
+    // Use provided height or fallback to responsive height
+    final defaultHeight = widget.height ?? MediaQuery.of(context).size.height * 0.25;
+
     if (_isLoading) {
       return Container(
         width: widget.width,
-        height: widget.height ?? 200,
+        height: defaultHeight,
         color: Colors.black,
         child: const Center(child: CircularProgressIndicator(color: Colors.white)),
       );
@@ -267,7 +275,7 @@ class _HlsCameraStreamWidgetState extends State<HlsCameraStreamWidget> with Widg
     if (_error != null) {
       return Container(
         width: widget.width,
-        height: widget.height ?? 200,
+        height: defaultHeight,
         color: Colors.black,
         child: Center(
           child: ElevatedButton(
@@ -295,7 +303,7 @@ class _HlsCameraStreamWidgetState extends State<HlsCameraStreamWidget> with Widg
     }
     return Container(
       width: widget.width,
-      height: widget.height ?? 200,
+      height: defaultHeight,
       color: Colors.black,
       child: const Center(
         child: Text('No video available', style: TextStyle(color: Colors.white)),
