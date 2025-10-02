@@ -27,9 +27,14 @@ class CameraStreamCard extends StatefulWidget {
   State<CameraStreamCard> createState() => _CameraStreamCardState();
 }
 
-class _CameraStreamCardState extends State<CameraStreamCard> {
+class _CameraStreamCardState extends State<CameraStreamCard> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Must call super.build when using AutomaticKeepAliveClientMixin
+
     // Debug log để xem device status
     debugPrint(
       'CameraStreamCard: Camera ${widget.camera.name} - deviceStatus: "${widget.camera.deviceStatus}", status: "${widget.camera.status}"',

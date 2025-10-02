@@ -206,6 +206,9 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    // padding status bar
+    final double statusBarHeight = MediaQuery.of(context).padding.top;
+
     return ChangeNotifierProvider<CameraSelectionProvider>.value(
       value: _cameraSelectionProvider,
       child: FutureBuilder<SharedPreferences>(
@@ -299,7 +302,7 @@ class _HomePageState extends State<HomePage> {
                   children: <Widget>[
                     Container(
                       decoration: const BoxDecoration(gradient: AppGradients.primary),
-                      padding: const EdgeInsets.fromLTRB(24, 36, 24, 24),
+                      padding: EdgeInsets.fromLTRB(24, statusBarHeight + 16, 24, 24),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.center,
