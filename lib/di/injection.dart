@@ -21,7 +21,13 @@ abstract class RegisterModule {
   Future<SharedPreferences> get prefs => SharedPreferences.getInstance();
 
   @lazySingleton
-  Dio get dio => Dio();
+  Dio get dio => Dio(
+    BaseOptions(
+      connectTimeout: const Duration(seconds: 10),
+      receiveTimeout: const Duration(seconds: 10),
+      sendTimeout: const Duration(seconds: 10),
+    ),
+  );
 
   @lazySingleton
   PinCameraPreference pinCameraPreference(SharedPreferences prefs) =>

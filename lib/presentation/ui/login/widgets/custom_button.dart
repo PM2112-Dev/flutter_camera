@@ -21,31 +21,35 @@ class CustomButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const borderRadius = BorderRadius.all(Radius.circular(8));
+    const textStyle = TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white);
+
+    final buttonChild = isLoading
+        ? const SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.5,
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            ),
+          )
+        : Text(text, style: textStyle);
+
     if (gradient != null) {
       // Gradient button
-      return SizedBox(
-        width: double.infinity,
-        height: 50,
-        child: Container(
-          decoration: BoxDecoration(gradient: gradient, borderRadius: BorderRadius.circular(8)),
-          child: ElevatedButton(
-            onPressed: isLoading ? null : onPressed,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.transparent,
-              shadowColor: Colors.transparent,
-              foregroundColor: textColor ?? Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            child: isLoading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : Text(text, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          gradient: gradient,
+          borderRadius: borderRadius,
+          boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2))],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: isLoading ? null : onPressed,
+            borderRadius: borderRadius,
+            child: Center(child: buttonChild),
           ),
         ),
       );
@@ -53,25 +57,15 @@ class CustomButton extends StatelessWidget {
 
     // Regular button
     return SizedBox(
-      width: double.infinity,
-      height: 50,
       child: ElevatedButton(
         onPressed: isLoading ? null : onPressed,
         style: ElevatedButton.styleFrom(
           backgroundColor: backgroundColor ?? AppColors.primary,
-          foregroundColor: textColor ?? Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          foregroundColor: Colors.white,
+          shape: const RoundedRectangleBorder(borderRadius: borderRadius),
+          elevation: 2,
         ),
-        child: isLoading
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              )
-            : Text(text, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+        child: buttonChild,
       ),
     );
   }

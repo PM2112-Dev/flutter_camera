@@ -20,8 +20,11 @@ class CustomTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const borderRadius = BorderRadius.all(Radius.circular(8));
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           label,
@@ -37,21 +40,26 @@ class CustomTextField extends StatelessWidget {
           obscureText: obscureText,
           validator: validator,
           keyboardType: keyboardType,
+          textInputAction: obscureText ? TextInputAction.done : TextInputAction.next,
           decoration: InputDecoration(
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            border: const OutlineInputBorder(borderRadius: borderRadius),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.grey[300]!),
+              borderRadius: borderRadius,
+              borderSide: BorderSide(color: Colors.grey.shade300),
             ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Colors.blue),
+            focusedBorder: const OutlineInputBorder(
+              borderRadius: borderRadius,
+              borderSide: BorderSide(color: Colors.blue, width: 2),
             ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Colors.red),
+            errorBorder: const OutlineInputBorder(
+              borderRadius: borderRadius,
+              borderSide: BorderSide(color: Colors.red),
+            ),
+            focusedErrorBorder: const OutlineInputBorder(
+              borderRadius: borderRadius,
+              borderSide: BorderSide(color: Colors.red, width: 2),
             ),
             suffixIcon: suffixIcon,
           ),
