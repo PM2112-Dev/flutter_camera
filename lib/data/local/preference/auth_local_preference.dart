@@ -78,11 +78,15 @@ class AuthLocalPreference {
     final baseUrl = getBaseUrl();
     final port = getPort();
     if (baseUrl != null && port != null) {
-      // Remove http:// if already present
-      final cleanBaseUrl = baseUrl.startsWith('http://') ? baseUrl.substring(7) : baseUrl;
-      return 'http://$cleanBaseUrl:$port';
+      // Check if baseUrl already has protocol (http:// or https://)
+      if (baseUrl.startsWith('http://') || baseUrl.startsWith('https://')) {
+        return '$baseUrl:$port';
+      } else {
+        // Default to http if no protocol specified
+        return 'http://$baseUrl:$port';
+      }
     }
-    return 'http://thermal.infosysvietnam.com.vn:10253'; // Default fallback
+    return 'https://thermal.infosysvietnam.com.vn:10253'; // Default fallback with HTTPS
   }
 
   Future<void> clearServerConfig() async {
@@ -112,15 +116,60 @@ class AuthLocalPreference {
     final baseUrl = getStreamBaseUrl();
     final port = getStreamPort();
     if (baseUrl != null && port != null) {
-      // Remove http:// if already present
-      final cleanBaseUrl = baseUrl.startsWith('http://') ? baseUrl.substring(7) : baseUrl;
-      return 'http://$cleanBaseUrl:$port';
+      // Check if baseUrl already has protocol (http:// or https://)
+      if (baseUrl.startsWith('http://') || baseUrl.startsWith('https://')) {
+        return '$baseUrl:$port';
+      } else {
+        // Default to http if no protocol specified
+        return 'http://$baseUrl:$port';
+      }
     }
-    return 'http://thermal.mtktech.com.vn:1984'; // Default fallback
+    return 'https://thermal.mtktech.com.vn:1984'; // Default fallback with HTTPS
   }
 
   Future<void> clearStreamServerConfig() async {
     await _prefs.remove(_streamBaseUrlKey);
     await _prefs.remove(_streamPortKey);
+  }
+
+  // Helper methods for URL validation and normalization
+  static String normalizeUrl(String url) {
+    // Remove trailing slash if present
+    if (url.endsWith('/')) {
+      url = url.substring(0, url.length - 1);
+    }
+
+    // If no protocol specified, default to http://
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = 'http://$url';
+    }
+
+    return url;
+  }
+
+  static bool isValidUrl(String url) {
+    try {
+      final uri = Uri.parse(url);
+      return uri.hasScheme && (uri.scheme == 'http' || uri.scheme == 'https') && uri.hasAuthority;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Enhanced save methods with URL normalization
+  Future<void> saveServerConfigWithNormalization({
+    required String baseUrl,
+    required int port,
+  }) async {
+    final normalizedUrl = normalizeUrl(baseUrl);
+    await saveServerConfig(baseUrl: normalizedUrl, port: port);
+  }
+
+  Future<void> saveStreamServerConfigWithNormalization({
+    required String baseUrl,
+    required int port,
+  }) async {
+    final normalizedUrl = normalizeUrl(baseUrl);
+    await saveStreamServerConfig(baseUrl: normalizedUrl, port: port);
   }
 }

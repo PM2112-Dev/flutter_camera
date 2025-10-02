@@ -50,11 +50,11 @@ class _SettingsPageState extends State<SettingsPage> {
     StreamServerConfig streamConfig,
   ) async {
     try {
-      await _authPreference.saveServerConfig(
+      await _authPreference.saveServerConfigWithNormalization(
         baseUrl: serverConfig.baseUrl,
         port: serverConfig.port,
       );
-      await _authPreference.saveStreamServerConfig(
+      await _authPreference.saveStreamServerConfigWithNormalization(
         baseUrl: streamConfig.baseUrl,
         port: streamConfig.port,
       );

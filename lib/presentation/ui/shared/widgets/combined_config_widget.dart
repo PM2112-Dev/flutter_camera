@@ -42,7 +42,7 @@ class _CombinedConfigWidgetState extends State<CombinedConfigWidget> {
       _serverBaseUrlController.text = widget.initialServerConfig!.baseUrl;
       _serverPortController.text = widget.initialServerConfig!.port.toString();
     } else {
-      _serverBaseUrlController.text = 'thermal.infosysvietnam.com.vn';
+      _serverBaseUrlController.text = 'https://thermal.infosysvietnam.com.vn';
       _serverPortController.text = '10253';
     }
 
@@ -51,7 +51,7 @@ class _CombinedConfigWidgetState extends State<CombinedConfigWidget> {
       _streamBaseUrlController.text = widget.initialStreamConfig!.baseUrl;
       _streamPortController.text = widget.initialStreamConfig!.port.toString();
     } else {
-      _streamBaseUrlController.text = 'thermal.mtktech.com.vn';
+      _streamBaseUrlController.text = 'https://thermal.mtktech.com.vn';
       _streamPortController.text = '1984';
     }
   }
@@ -88,54 +88,42 @@ class _CombinedConfigWidgetState extends State<CombinedConfigWidget> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Server Configuration Section
-          _buildConfigSection(
-            title: 'API Server Configuration',
-            subtitle: 'Configure the main API server for authentication and data',
-            icon: Icons.api,
-            color: AppColors.primary,
-            children: [
-              _buildTextField(
-                controller: _serverBaseUrlController,
-                label: 'Base URL',
-                hint: 'thermal.infosysvietnam.com.vn',
-                prefixIcon: Icons.language,
-              ),
-              const SizedBox(height: 16),
-              _buildTextField(
-                controller: _serverPortController,
-                label: 'Port',
-                hint: '10253',
-                prefixIcon: Icons.settings_ethernet,
-                keyboardType: TextInputType.number,
-              ),
-            ],
+          // API Server Configuration
+          _buildListHeader('API Server Configuration', Icons.api),
+          _buildTextField(
+            controller: _serverBaseUrlController,
+            label: 'Base URL',
+            hint: 'https://thermal.infosysvietnam.com.vn',
+            prefixIcon: Icons.language,
+            isUrl: true,
+          ),
+          const SizedBox(height: 16),
+          _buildTextField(
+            controller: _serverPortController,
+            label: 'Port',
+            hint: '10253',
+            prefixIcon: Icons.settings_ethernet,
+            keyboardType: TextInputType.number,
           ),
 
           const SizedBox(height: 24),
 
-          // Stream Server Configuration Section
-          _buildConfigSection(
-            title: 'Stream Server Configuration',
-            subtitle: 'Configure the video stream server for camera feeds',
-            icon: Icons.stream,
-            color: AppColors.secondary,
-            children: [
-              _buildTextField(
-                controller: _streamBaseUrlController,
-                label: 'Base URL',
-                hint: 'thermal.mtktech.com.vn',
-                prefixIcon: Icons.language,
-              ),
-              const SizedBox(height: 16),
-              _buildTextField(
-                controller: _streamPortController,
-                label: 'Port',
-                hint: '1984',
-                prefixIcon: Icons.settings_ethernet,
-                keyboardType: TextInputType.number,
-              ),
-            ],
+          // Stream Server Configuration
+          _buildListHeader('Stream Server Configuration', Icons.stream),
+          _buildTextField(
+            controller: _streamBaseUrlController,
+            label: 'Base URL',
+            hint: 'https://thermal.mtktech.com.vn',
+            prefixIcon: Icons.language,
+            isUrl: true,
+          ),
+          const SizedBox(height: 16),
+          _buildTextField(
+            controller: _streamPortController,
+            label: 'Port',
+            hint: '1984',
+            prefixIcon: Icons.settings_ethernet,
+            keyboardType: TextInputType.number,
           ),
 
           const SizedBox(height: 32),
@@ -154,52 +142,33 @@ class _CombinedConfigWidgetState extends State<CombinedConfigWidget> {
                 ),
               ),
               child: Text(
-                'Save All Configurations',
-                style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold, color: Colors.white),
+                'Lưu cấu hình',
+                style: AppTextStyles.bodyLarge.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
             ),
           ),
-          const SizedBox(height: 32),
         ],
       ),
     );
   }
 
-  Widget _buildConfigSection({
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required Color color,
-    required List<Widget> children,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppBorderRadius.large),
-        border: Border.all(color: AppColors.border),
-        boxShadow: AppShadows.cardShadow,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildListHeader(String title, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
         children: [
-          Row(
-            children: [
-              Icon(icon, color: color, size: 24),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  title,
-                  style: AppTextStyles.headline3.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-              ),
-            ],
+          Icon(icon, color: AppColors.primary, size: 20),
+          const SizedBox(width: 8),
+          Text(
+            title,
+            style: AppTextStyles.bodyLarge.copyWith(
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
           ),
-          const SizedBox(height: 20),
-          ...children,
         ],
       ),
     );
@@ -211,6 +180,7 @@ class _CombinedConfigWidgetState extends State<CombinedConfigWidget> {
     required String hint,
     required IconData prefixIcon,
     TextInputType? keyboardType,
+    bool isUrl = false,
   }) {
     return TextFormField(
       controller: controller,
@@ -229,7 +199,22 @@ class _CombinedConfigWidgetState extends State<CombinedConfigWidget> {
         if (value == null || value.trim().isEmpty) {
           return 'Please enter $label';
         }
-        if (keyboardType == TextInputType.number) {
+
+        if (isUrl) {
+          // Basic URL validation
+          final urlValue = value.trim();
+          if (!urlValue.contains('.')) {
+            return 'Please enter a valid URL';
+          }
+          // Check if it has protocol, if not that's ok (will be added automatically)
+          if (urlValue.startsWith('http://') || urlValue.startsWith('https://')) {
+            try {
+              Uri.parse(urlValue);
+            } catch (e) {
+              return 'Please enter a valid URL format';
+            }
+          }
+        } else if (keyboardType == TextInputType.number) {
           final port = int.tryParse(value.trim());
           if (port == null || port < 1 || port > 65535) {
             return 'Please enter a valid port number (1-65535)';

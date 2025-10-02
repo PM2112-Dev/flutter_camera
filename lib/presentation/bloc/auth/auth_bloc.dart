@@ -84,24 +84,38 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
   Future<void> _onProfileRequested(ProfileRequested event, Emitter<AuthState> emit) async {
     try {
-      print('Getting profile...');
-      final result = await _getProfileUseCase();
+      print('📡 Getting profile...');
+      
+      // Add timeout for profile request to prevent hanging
+      final result = await _getProfileUseCase().timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          print('⏱️ Profile request timed out after 15 seconds');
+          // On timeout, treat as unauthenticated (server might be unreachable)
+          _firebaseMessagingService.clearCurrentUser();
+          throw Exception('Profile request timed out');
+        },
+      );
 
       result.fold(
         (failure) {
-          print('Profile failed: ${failure.toString()}');
-          emit(AuthError(message: failure.toString()));
+          print('❌ Profile failed: ${failure.toString()}');
+          // On failure, clear user and show unauthenticated
+          _firebaseMessagingService.clearCurrentUser();
+          emit(const AuthUnauthenticated());
         },
         (user) {
-          print('Profile successful: ${user.username}');
+          print('✅ Profile successful: ${user.username}');
           // Register FCM token for the authenticated user
           _firebaseMessagingService.registerTokenForNewUser(user);
           emit(AuthAuthenticated(user: user));
         },
       );
     } catch (e) {
-      print('Profile exception: $e');
-      emit(AuthError(message: 'Profile failed: $e'));
+      print('⚠️ Profile exception: $e');
+      // On exception, treat as unauthenticated
+      _firebaseMessagingService.clearCurrentUser();
+      emit(const AuthUnauthenticated());
     }
   }
 
@@ -125,7 +139,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         (tokens) {
           if (tokens != null && tokens.accessToken.isNotEmpty) {
             print('✅ Found stored tokens, getting profile...');
-            // User has tokens, get profile to verify
+            // User has tokens, get profile to verify with timeout
             add(const ProfileRequested());
           } else {
             print('❌ No valid tokens found');
@@ -137,7 +151,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         },
       );
     } catch (e) {
-      print('Auth status check exception: $e');
+      print('⚠️ Auth status check exception: $e');
       // Clear FCM user info on exception
       _firebaseMessagingService.clearCurrentUser();
       emit(const AuthUnauthenticated());
