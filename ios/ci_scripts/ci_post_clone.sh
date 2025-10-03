@@ -12,7 +12,7 @@ echo "════════════════════════�
 
 # Install Flutter
 # Use fixed version for reproducibility
-FLUTTER_VERSION="3.24.0"
+FLUTTER_VERSION="3.27.1"
 
 # Download Flutter
 echo "⬇️  Downloading Flutter ${FLUTTER_VERSION}..."
