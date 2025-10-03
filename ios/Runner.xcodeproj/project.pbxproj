@@ -12,6 +12,7 @@
 		3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */; };
 		5DD04BC9A1B6462C3D7D2F4A /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6956E21E284909D436C3D8D8 /* Pods_RunnerTests.framework */; };
 		6B5C31D82E8B7850005EB499 /* ImageGallerySaver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B5C31D72E8B7850005EB499 /* ImageGallerySaver.swift */; };
+		6B74BDC22E8F8419006E34A5 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 6B74BDC12E8F8419006E34A5 /* GoogleService-Info.plist */; };
 		6BD2AB172E8D1C500004B3E9 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 6BD2AB152E8D1C500004B3E9 /* LaunchScreen.storyboard */; };
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
@@ -52,6 +53,7 @@
 		48035D5A9ECC15089EA08403 /* Pods-Runner.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.debug.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"; sourceTree = "<group>"; };
 		6956E21E284909D436C3D8D8 /* Pods_RunnerTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RunnerTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		6B5C31D72E8B7850005EB499 /* ImageGallerySaver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageGallerySaver.swift; sourceTree = "<group>"; };
+		6B74BDC12E8F8419006E34A5 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		6B8CD2F92E84D719000B7321 /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
 		6BD2AB162E8D1C500004B3E9 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Runner-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -142,6 +144,7 @@
 		97C146F01CF9000F007C117D /* Runner */ = {
 			isa = PBXGroup;
 			children = (
+				6B74BDC12E8F8419006E34A5 /* GoogleService-Info.plist */,
 				6BD2AB152E8D1C500004B3E9 /* LaunchScreen.storyboard */,
 				6B5C31D72E8B7850005EB499 /* ImageGallerySaver.swift */,
 				6B8CD2F92E84D719000B7321 /* Runner.entitlements */,
@@ -267,6 +270,7 @@
 			files = (
 				3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */,
 				6BD2AB172E8D1C500004B3E9 /* LaunchScreen.storyboard in Resources */,
+				6B74BDC22E8F8419006E34A5 /* GoogleService-Info.plist in Resources */,
 				97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */,
 				97C146FC1CF9000F007C117D /* Main.storyboard in Resources */,
 			);
@@ -505,7 +509,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.mtk.thermal;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.thermalAppN;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
@@ -693,7 +697,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.mtk.thermal;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.thermalAppN;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
@@ -721,7 +725,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.mtk.thermal;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.thermalAppN;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";

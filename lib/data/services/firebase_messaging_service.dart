@@ -30,9 +30,7 @@ class FirebaseMessagingService {
 
   FirebaseMessaging get messaging {
     if (_messaging == null) {
-      throw Exception(
-        'Firebase messaging not initialized. Call initialize() first.',
-      );
+      throw Exception('Firebase messaging not initialized. Call initialize() first.');
     }
     return _messaging!;
   }
@@ -50,12 +48,11 @@ class FirebaseMessagingService {
       print('🔥 Firebase: Messaging instance created');
 
       // Set background message handler
-      FirebaseMessaging.onBackgroundMessage(
-        _firebaseMessagingBackgroundHandler,
-      );
+      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
       print('🔥 Firebase: Background handler registered');
 
       // Request permission for notifications
+      print('🔔 Firebase: Requesting notification permission...');
       NotificationSettings settings = await messaging.requestPermission(
         alert: true,
         announcement: false,
@@ -67,14 +64,25 @@ class FirebaseMessagingService {
       );
 
       print('📱 Firebase: Permission status: ${settings.authorizationStatus}');
+      print('📱 Firebase: Alert enabled: ${settings.alert}');
+      print('📱 Firebase: Badge enabled: ${settings.badge}');
+      print('📱 Firebase: Sound enabled: ${settings.sound}');
 
       if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+        print('✅ Firebase: Permission authorized, setting up token...');
         await _setupToken();
         await _setupMessageHandlers();
         _isInitialized = true;
         print('✅ Firebase: Messaging initialization complete');
+      } else if (settings.authorizationStatus == AuthorizationStatus.provisional) {
+        print('⚠️ Firebase: Permission is provisional');
+        await _setupToken();
+        await _setupMessageHandlers();
+        _isInitialized = true;
+        print('✅ Firebase: Messaging initialization complete (provisional)');
       } else {
-        print('❌ Firebase: Permission denied');
+        print('❌ Firebase: Permission denied or not determined');
+        print('❌ Firebase: Status: ${settings.authorizationStatus}');
       }
     } catch (e) {
       print('❌ Firebase: Initialization error: $e');
@@ -84,6 +92,13 @@ class FirebaseMessagingService {
   Future<void> _setupToken() async {
     try {
       print('🔑 Firebase: Getting FCM token...');
+
+      // On iOS, we need to wait a bit for APNS token to be registered
+      if (Platform.isIOS) {
+        print('⏳ Firebase: Waiting for APNS token (iOS)...');
+        await Future.delayed(const Duration(seconds: 2));
+      }
+
       _fcmToken = await messaging.getToken();
       print('🔑 Firebase: FCM Token received: $_fcmToken');
       print('📋 Firebase: Token length: ${_fcmToken?.length ?? 0} characters');
@@ -93,6 +108,8 @@ class FirebaseMessagingService {
         await _sendTokenToServer();
       } else {
         print('⚠️ Firebase: FCM Token is null!');
+        print('⚠️ Firebase: This might be because APNS token is not set yet');
+        print('⚠️ Firebase: Make sure Push Notifications capability is enabled in Xcode');
       }
 
       // Listen for token refresh
@@ -104,6 +121,11 @@ class FirebaseMessagingService {
       });
     } catch (e) {
       print('❌ Firebase: Token setup error: $e');
+      print('❌ Firebase: Error type: ${e.runtimeType}');
+      if (e.toString().contains('apns-token-not-set')) {
+        print('❌ Firebase: APNS token not set - this is expected in simulator');
+        print('❌ Firebase: Please test on a real iOS device');
+      }
     }
   }
 
@@ -113,21 +135,15 @@ class FirebaseMessagingService {
     try {
       final tokens = _authPreference.getTokens();
       if (tokens?.accessToken == null) {
-        print(
-          '⚠️ Firebase: No auth token available, skipping server registration',
-        );
+        print('⚠️ Firebase: No auth token available, skipping server registration');
         return;
       }
 
       // Use current user ID if available, otherwise skip registration
       if (_currentUser == null) {
-        print(
-          '⚠️ Firebase: No current user available, skipping server registration',
-        );
+        print('⚠️ Firebase: No current user available, skipping server registration');
         return;
       }
-
-      
 
       final success = await _userTokenApi.postUserToken(
         userId: _currentUser!.id.toString(),
@@ -229,9 +245,7 @@ class FirebaseMessagingService {
 
   /// Cập nhật thông tin user hiện tại và đăng ký lại FCM token
   Future<void> updateCurrentUser(User user) async {
-    print(
-      '👤 Firebase: Updating current user to ${user.username} (ID: ${user.id})',
-    );
+    print('👤 Firebase: Updating current user to ${user.username} (ID: ${user.id})');
     _currentUser = user;
 
     // Re-register FCM token with new user
