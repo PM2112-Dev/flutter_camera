@@ -1,55 +1,108 @@
-#!/bin/sh#!/bin/sh
+#!/bin/sh#!/bin/sh#!/bin/sh
 
 
+
+# Fail this script if any subcommand fails.
+
+set -e
 
 # Fail this script if any subcommand fails.# Fail this script if any subcommand fails.
 
-set -eset -e
+# The default execution directory of this script is the ci_scripts directory.
+
+cd $CI_PRIMARY_REPOSITORY_PATH # change working directory to the root of your cloned repo.set -eset -e
 
 
 
-# The default execution directory of this script is the ci_scripts directory.# The default execution directory of this script is the ci_scripts directory.
+echo "════════════════════════════════════════════════════════════"
 
-cd $CI_PRIMARY_REPOSITORY_PATH # change working directory to the root of your cloned repo.cd $CI_PRIMARY_REPOSITORY_PATH # change working directory to the root of your cloned repo.
+echo "📱 Installing Flutter SDK for Xcode Cloud"
 
-
-
-echo "════════════════════════════════════════════════════════════"echo "════════════════════════════════════════════════════════════"
-
-echo "📱 Installing Flutter SDK for Xcode Cloud"echo "📱 Installing Flutter SDK for Xcode Cloud"
-
-echo "════════════════════════════════════════════════════════════"echo "════════════════════════════════════════════════════════════"
+echo "════════════════════════════════════════════════════════════"# The default execution directory of this script is the ci_scripts directory.# The default execution directory of this script is the ci_scripts directory.
 
 
 
-# Install Flutter# Install Flutter
+# Install Fluttercd $CI_PRIMARY_REPOSITORY_PATH # change working directory to the root of your cloned repo.cd $CI_PRIMARY_REPOSITORY_PATH # change working directory to the root of your cloned repo.
+
+# Use fixed version for reproducibility
+
+FLUTTER_VERSION="3.24.0"
+
+
+
+# Download Flutterecho "════════════════════════════════════════════════════════════"echo "════════════════════════════════════════════════════════════"
+
+echo "⬇️  Downloading Flutter ${FLUTTER_VERSION}..."
+
+git clone https://github.com/flutter/flutter.git --depth 1 -b ${FLUTTER_VERSION} $HOME/flutterecho "📱 Installing Flutter SDK for Xcode Cloud"echo "📱 Installing Flutter SDK for Xcode Cloud"
+
+
+
+# Add Flutter to PATHecho "════════════════════════════════════════════════════════════"echo "════════════════════════════════════════════════════════════"
+
+export PATH="$PATH:$HOME/flutter/bin"
+
+
+
+# Check Flutter version
+
+echo "✅ Flutter installed:"# Install Flutter# Install Flutter
+
+flutter --version
 
 # Use fixed version for reproducibility# Use fixed version for reproducibility
 
-FLUTTER_VERSION="3.24.0"FLUTTER_VERSION="3.24.0"
+# Disable analytics
+
+echo "🔇 Disabling analytics..."FLUTTER_VERSION="3.24.0"FLUTTER_VERSION="3.24.0"
+
+flutter config --no-analytics
 
 
 
-# Download Flutter# Download Flutter
+# Run Flutter Doctor
+
+echo "🏥 Running Flutter Doctor..."# Download Flutter# Download Flutter
+
+flutter doctor
 
 echo "⬇️  Downloading Flutter ${FLUTTER_VERSION}..."echo "⬇️  Downloading Flutter ${FLUTTER_VERSION}..."
 
-git clone https://github.com/flutter/flutter.git --depth 1 -b ${FLUTTER_VERSION} $HOME/fluttergit clone https://github.com/flutter/flutter.git --depth 1 -b ${FLUTTER_VERSION} $HOME/flutter
+# Get Flutter dependencies
+
+echo "📦 Getting Flutter dependencies..."git clone https://github.com/flutter/flutter.git --depth 1 -b ${FLUTTER_VERSION} $HOME/fluttergit clone https://github.com/flutter/flutter.git --depth 1 -b ${FLUTTER_VERSION} $HOME/flutter
+
+flutter pub get
 
 
 
-# Add Flutter to PATH# Add Flutter to PATH
+# Generate required files
+
+echo "🔨 Generating code with build_runner..."# Add Flutter to PATH# Add Flutter to PATH
+
+flutter pub run build_runner build --delete-conflicting-outputs
 
 export PATH="$PATH:$HOME/flutter/bin"export PATH="$PATH:$HOME/flutter/bin"
 
+# Install CocoaPods dependencies
+
+echo "📦 Installing CocoaPods dependencies..."
+
+cd ios
+
+pod install# Check Flutter version# Check Flutter version
 
 
-# Check Flutter version# Check Flutter version
 
-echo "✅ Flutter installed:"echo "✅ Flutter installed:"
+echo "════════════════════════════════════════════════════════════"echo "✅ Flutter installed:"echo "✅ Flutter installed:"
 
-flutter --versionflutter --version
+echo "✅ Flutter setup complete!"
 
+echo "════════════════════════════════════════════════════════════"flutter --versionflutter --version
+
+
+
+exit 0
 
 
 # Disable analytics# Disable analytics

@@ -1,42 +1,81 @@
-#!/bin/sh#!/bin/sh
+#!/bin/sh#!/bin/sh#!/bin/sh
 
 
+
+# Fail this script if any subcommand fails.
+
+set -e
 
 # Fail this script if any subcommand fails.# Fail this script if any subcommand fails.
 
+cd $CI_PRIMARY_REPOSITORY_PATH
+
 set -eset -e
 
+echo "════════════════════════════════════════════════════════════"
 
+echo "🔍 Pre-Xcodebuild Checks"
+
+echo "════════════════════════════════════════════════════════════"
 
 cd $CI_PRIMARY_REPOSITORY_PATHcd $CI_PRIMARY_REPOSITORY_PATH
 
+# Add Flutter to PATH
 
-
-echo "════════════════════════════════════════════════════════════"echo "════════════════════════════════════════════════════════════"
-
-echo "🔍 Pre-Xcodebuild Checks"echo "🔍 Pre-Xcodebuild Checks"
-
-echo "════════════════════════════════════════════════════════════"echo "════════════════════════════════════════════════════════════"
+export PATH="$PATH:$HOME/flutter/bin"
 
 
 
-# Add Flutter to PATH# Add Flutter to PATH
+# Verify Flutter is availableecho "════════════════════════════════════════════════════════════"echo "════════════════════════════════════════════════════════════"
 
-export PATH="$PATH:$HOME/flutter/bin"export PATH="$PATH:$HOME/flutter/bin"
+echo "✅ Flutter version:"
 
-
-
-# Verify Flutter is available# Verify Flutter is available
-
-echo "✅ Flutter version:"echo "✅ Flutter version:"
-
-flutter --versionflutter --version
+flutter --versionecho "🔍 Pre-Xcodebuild Checks"echo "🔍 Pre-Xcodebuild Checks"
 
 
 
-# Clean and rebuild if needed# Clean and rebuild if needed
+# Clean and rebuild if neededecho "════════════════════════════════════════════════════════════"echo "════════════════════════════════════════════════════════════"
 
-echo "🧹 Cleaning build artifacts..."echo "🧹 Cleaning build artifacts..."
+echo "🧹 Cleaning build artifacts..."
+
+flutter clean
+
+
+
+# Ensure dependencies are up to date# Add Flutter to PATH# Add Flutter to PATH
+
+echo "📦 Updating dependencies..."
+
+flutter pub getexport PATH="$PATH:$HOME/flutter/bin"export PATH="$PATH:$HOME/flutter/bin"
+
+
+
+# Generate code
+
+echo "🔨 Generating code..."
+
+flutter pub run build_runner build --delete-conflicting-outputs# Verify Flutter is available# Verify Flutter is available
+
+
+
+# Verify iOS build can be performedecho "✅ Flutter version:"echo "✅ Flutter version:"
+
+echo "✅ Verifying iOS configuration..."
+
+flutter build ios --config-only --no-codesignflutter --versionflutter --version
+
+
+
+echo "════════════════════════════════════════════════════════════"
+
+echo "✅ Pre-Xcodebuild checks complete!"
+
+echo "════════════════════════════════════════════════════════════"# Clean and rebuild if needed# Clean and rebuild if needed
+
+
+
+exit 0echo "🧹 Cleaning build artifacts..."echo "🧹 Cleaning build artifacts..."
+
 
 flutter cleanflutter clean
 
