@@ -41,6 +41,10 @@ flutter pub get
 echo "🔨 Generating code with build_runner..."
 flutter pub run build_runner build --delete-conflicting-outputs
 
+# Precache iOS artifacts
+echo "⬇️  Downloading Flutter iOS artifacts..."
+flutter precache --ios
+
 # Install CocoaPods dependencies
 echo "📦 Installing CocoaPods dependencies..."
 cd ios

@@ -12,7 +12,7 @@ echo "════════════════════════�
 
 # Install Flutter
 # Use fixed version for reproducibility
-FLUTTER_VERSION="3.27.1"
+FLUTTER_VERSION="3.35.5"
 
 # Download Flutter
 echo "⬇️  Downloading Flutter ${FLUTTER_VERSION}..."
@@ -40,6 +40,10 @@ flutter pub get
 # Generate required files
 echo "🔨 Generating code with build_runner..."
 flutter pub run build_runner build --delete-conflicting-outputs
+
+# Precache iOS artifacts
+echo "⬇️  Downloading Flutter iOS artifacts..."
+flutter precache --ios
 
 # Install CocoaPods dependencies
 echo "📦 Installing CocoaPods dependencies..."
