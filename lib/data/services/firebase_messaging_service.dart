@@ -145,6 +145,25 @@ class FirebaseMessagingService {
         return;
       }
 
+      // Lấy FCM token cũ đã lưu
+      final savedToken = _authPreference.getFcmToken();
+
+      // So sánh token cũ và mới
+      if (savedToken == _fcmToken) {
+        print('ℹ️ Firebase: Token unchanged, skipping server registration');
+        print('📋 Firebase: Saved token: ${savedToken?.substring(0, 20)}...');
+        print('📋 Firebase: Current token: ${_fcmToken?.substring(0, 20)}...');
+        return;
+      }
+
+      print('🔄 Firebase: Token changed, sending to server...');
+      if (savedToken != null) {
+        print('📋 Firebase: Old token: ${savedToken.substring(0, 20)}...');
+      } else {
+        print('📋 Firebase: No saved token found (first time)');
+      }
+      print('📋 Firebase: New token: ${_fcmToken!.substring(0, 20)}...');
+
       final success = await _userTokenApi.postUserToken(
         userId: _currentUser!.id.toString(),
         deviceType: Platform.isAndroid ? "android" : "ios",
@@ -155,9 +174,12 @@ class FirebaseMessagingService {
       );
 
       if (success) {
+        // Lưu token mới vào SharedPreferences sau khi gửi thành công
+        await _authPreference.saveFcmToken(_fcmToken!);
         print(
           '✅ Firebase: Token registered with server successfully for user ${_currentUser!.username}',
         );
+        print('💾 Firebase: New token saved to local storage');
       } else {
         print('❌ Firebase: Failed to register token with server');
       }
@@ -255,6 +277,7 @@ class FirebaseMessagingService {
   }
 
   /// Hủy đăng ký FCM token khi logout
+  /// Note: Server không có API delete token, chỉ clear local
   Future<void> unregisterToken() async {
     if (_fcmToken == null) {
       print('⚠️ Firebase: No FCM token to unregister');
@@ -262,27 +285,21 @@ class FirebaseMessagingService {
     }
 
     try {
-      final tokens = _authPreference.getTokens();
-      if (tokens?.accessToken == null) {
-        print('⚠️ Firebase: No auth token available for unregistering');
-        return;
-      }
+      print('🧹 Firebase: Clearing FCM token from local storage...');
 
-      print('🗑️ Firebase: Unregistering FCM token...');
-      final success = await _userTokenApi.deleteUserToken(
-        token: _fcmToken!,
-        authToken: tokens?.accessToken ?? '',
-      );
+      // Server không có API delete token
+      // Token sẽ tự động invalid khi user logout hoặc server tự clean up
 
-      if (success) {
-        print('✅ Firebase: Token unregistered successfully');
-      } else {
-        print('❌ Firebase: Failed to unregister token');
-      }
-    } catch (e) {
-      print('❌ Firebase: Error unregistering token: $e');
-    } finally {
+      // Clear local FCM token
+      await _authPreference.clearFcmToken();
+      print('✅ Firebase: FCM token cleared from local storage');
+
       // Clear current user
+      _currentUser = null;
+      print('✅ Firebase: Current user cleared');
+    } catch (e) {
+      print('❌ Firebase: Error clearing FCM token: $e');
+      // Still clear current user even if clear token fails
       _currentUser = null;
     }
   }

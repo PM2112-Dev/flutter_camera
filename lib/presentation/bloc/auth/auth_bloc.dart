@@ -61,7 +61,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(const AuthLoading());
 
     try {
-      // LogoutUseCase will handle clearing tokens and API call
+      // Unregister FCM token BEFORE logout API (while we still have auth tokens)
+      await _firebaseMessagingService.unregisterToken();
+
+      // LogoutUseCase will handle logout API call and clearing tokens
       final result = await _logoutUseCase();
 
       result.fold(
@@ -71,8 +74,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         },
         (_) {
           print('Logout successful');
-          // Unregister FCM token when logging out
-          _firebaseMessagingService.unregisterToken();
           emit(const AuthUnauthenticated());
         },
       );

@@ -10,13 +10,23 @@ class LogoutUseCase {
   LogoutUseCase(this._repository);
 
   Future<Either<Failure, void>> call() async {
-    // Clear local tokens first
+    // Call logout API FIRST (while we still have tokens)
+    final logoutResult = await _repository.logout();
+
+    // Clear local tokens AFTER API call
+    // (regardless of API result - even if API fails, we still want to clear local tokens)
     final clearResult = await _repository.clearTokens();
+
+    // If logout API failed, return that error
+    if (logoutResult.isLeft()) {
+      return logoutResult;
+    }
+
+    // If clear failed, return that error
     if (clearResult.isLeft()) {
       return clearResult;
     }
 
-    // Call logout API
-    return await _repository.logout();
+    return const Right(null);
   }
 }

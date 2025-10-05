@@ -292,6 +292,16 @@ class _HlsCameraStreamWidgetState extends State<HlsCameraStreamWidget> with Widg
       );
     }
     if (_controller != null && _controller!.value.isInitialized) {
+      // Nếu không có width được chỉ định (width = infinity),
+      // chỉ dùng AspectRatio để video tự fit
+      if (widget.width == double.infinity) {
+        return AspectRatio(
+          aspectRatio: _controller!.value.aspectRatio,
+          child: VideoPlayer(_controller!),
+        );
+      }
+
+      // Nếu có width cụ thể, wrap trong Container
       return Container(
         width: widget.width,
         color: Colors.black,

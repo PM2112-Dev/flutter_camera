@@ -1,4 +1,5 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_camera/presentation/bloc/camera_control/camera_control_bloc.dart';
@@ -45,6 +46,7 @@ class _OnvifCameraPageState extends State<OnvifCameraPage> {
   late final String _cameraUniqueId;
   double _speedValue = 3.0; // Default to medium speed (30 out of 63)
   final GlobalKey _videoPlayerKey = GlobalKey();
+  bool _showControls = false; // State để ẩn/hiện bảng controls
 
   @override
   void initState() {
@@ -54,11 +56,30 @@ class _OnvifCameraPageState extends State<OnvifCameraPage> {
     _cameraId = widget.cameraId;
     _cameraUniqueId = widget.cameraUniqueId;
     print('cameraType: $_cameraType');
+
+    // Force landscape orientation khi vào màn hình
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+
+    // Ẩn system UI (status bar và navigation bar) để full screen
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   }
 
   @override
   void dispose() {
-    // ExoPlayer widget handles its own disposal
+    // Restore lại orientation về portrait khi thoát
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+
+    // Restore lại system UI
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: SystemUiOverlay.values);
+
     super.dispose();
   }
 
@@ -543,16 +564,29 @@ class _OnvifCameraPageState extends State<OnvifCameraPage> {
     return BlocProvider(
       create: (context) => getIt<CameraControlBloc>(),
       child: Scaffold(
-        backgroundColor: AppColors.background,
-        appBar: PreferredSize(
-          preferredSize: const Size.fromHeight(kToolbarHeight),
-          child: Container(
-            decoration: const BoxDecoration(gradient: AppGradients.primary),
-            child: AppBar(
-              title: Text(_cameraName),
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              foregroundColor: AppColors.textOnPrimary,
+        backgroundColor: Colors.black,
+        extendBodyBehindAppBar: true,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: Container(
+            margin: const EdgeInsets.only(top: 16.0),
+            alignment: Alignment.center,
+            child: Container(
+              padding: const EdgeInsets.all(4.0),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.5),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white.withOpacity(0.3), width: 1),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 8, spreadRadius: 1),
+                ],
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white, size: 24),
+                onPressed: () => Navigator.of(context).pop(),
+                padding: EdgeInsets.zero,
+              ),
             ),
           ),
         ),
@@ -571,20 +605,16 @@ class _OnvifCameraPageState extends State<OnvifCameraPage> {
               );
             }
           },
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
-                // Video Player (no rounded corners, 8px spacing from top)
-                const SizedBox(height: 8),
-                RepaintBoundary(
-                  key: _videoPlayerKey,
-                  child: Container(
-                    width: double.infinity,
-                    constraints: BoxConstraints(
-                      minHeight: 200,
-                      maxHeight: MediaQuery.of(context).size.height * 0.5,
-                    ),
-                    color: Colors.black,
+          child: Stack(
+            children: [
+              // Video player
+              Container(
+                width: double.infinity,
+                height: double.infinity,
+                color: Colors.black,
+                child: Center(
+                  child: RepaintBoundary(
+                    key: _videoPlayerKey,
                     child: Consumer<CameraStreamDataProvider>(
                       builder: (context, streamDataProvider, child) {
                         final streamData = streamDataProvider.getStreamData(_cameraUniqueId);
@@ -597,7 +627,14 @@ class _OnvifCameraPageState extends State<OnvifCameraPage> {
                         } else if (hasError) {
                           return _buildErrorPlaceholder(streamData!.error!);
                         } else if (streamId != null) {
-                          return HlsCameraStreamWidget(streamId: streamId, width: double.infinity);
+                          // Không truyền width để video tự fit theo aspect ratio
+                          return ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: MediaQuery.of(context).size.width,
+                              maxHeight: MediaQuery.of(context).size.height,
+                            ),
+                            child: HlsCameraStreamWidget(streamId: streamId),
+                          );
                         } else {
                           return _buildVideoPlaceholder();
                         }
@@ -605,31 +642,98 @@ class _OnvifCameraPageState extends State<OnvifCameraPage> {
                     ),
                   ),
                 ),
+              ),
 
-                // Control Panel
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      // Capture Button (tapping the whole button triggers capture)
-                      // Row(children: [_buildCaptureButton()]),
-                      const SizedBox(height: 24),
-                      // PTZ controls shown only when ptzType == 'Ptz'
-                      if (widget.ptzType.toLowerCase() == 'ptz') ...[
-                        _buildPTZControl(),
-                        const SizedBox(height: 16),
-                        _buildSpeedControl(),
-                        const SizedBox(height: 24),
-                      ],
+              // PTZ Control Panel (góc dưới bên trái)
+              if (_showControls && widget.ptzType.toLowerCase() == 'ptz')
+                Positioned(bottom: 80, left: 80, child: _buildPTZControl()),
 
-                      // Speed control: hide when cameraType == 'Fix'
-                      if (widget.cameraType.toLowerCase() != 'fix') ...[],
-                    ],
-                  ),
-                ),
-              ],
-            ),
+              // Speed Control Panel (góc dưới bên phải) - dịch xuống để tránh camera icon
+              if (_showControls && widget.ptzType.toLowerCase() == 'ptz')
+                Positioned(bottom: 80, right: 80, child: _buildSpeedControl()),
+
+              // Bottom toolbar
+              _buildBottomToolbar(),
+            ],
           ),
+          // Đã ẩn tạm thời phần điều khiển PTZ và chụp ảnh
+          // child: SingleChildScrollView(
+          //   child: Column(
+          //     children: [
+          //       // Video Player
+          //       RepaintBoundary(...),
+          //       // Control Panel
+          //       Container(
+          //         padding: const EdgeInsets.all(16),
+          //         child: Column(
+          //           children: [
+          //             if (widget.ptzType.toLowerCase() == 'ptz') ...[
+          //               _buildPTZControl(),
+          //               _buildSpeedControl(),
+          //             ],
+          //           ],
+          //         ),
+          //       ),
+          //     ],
+          //   ),
+          // ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomToolbar() {
+    return Positioned(
+      bottom: 0,
+      left: 0,
+      right: 0,
+      child: Container(
+        height: 60,
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.3),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.5),
+              blurRadius: 10,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Icon Controls (ẩn/hiện bảng điều khiển) - chỉ hiển thị nếu là PTZ camera
+            if (widget.ptzType.toLowerCase() == 'ptz')
+              _buildToolbarButton(
+                icon: _showControls
+                    ? Icon(Icons.control_camera, color: Colors.blue)
+                    : Icon(Icons.control_camera, color: Colors.white),
+                onTap: () {
+                  setState(() {
+                    _showControls = !_showControls;
+                  });
+                },
+              ),
+
+            // Icon Camera (chụp ảnh)
+            _buildToolbarButton(
+              icon: Icon(Icons.camera_alt, color: Colors.white),
+              onTap: _captureImage,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildToolbarButton({required Icon icon, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [icon], // icon đã là Icon widget rồi, không cần wrap lại
         ),
       ),
     );
@@ -637,228 +741,107 @@ class _OnvifCameraPageState extends State<OnvifCameraPage> {
 
   Widget _buildSpeedControl() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      width: 70,
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppBorderRadius.medium),
-        border: Border.all(color: AppColors.border),
-        boxShadow: AppShadows.cardShadow,
+        color: Colors.black.withOpacity(0.7),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withOpacity(0.3), width: 1),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 10, spreadRadius: 2),
+        ],
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Điều khiển Tốc độ',
-                style: AppTextStyles.bodyLarge.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                ),
+          // Icon tốc độ
+          const Icon(Icons.speed, color: Colors.white, size: 20),
+          const SizedBox(height: 6),
+          // Giá trị tốc độ hiện tại
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            decoration: BoxDecoration(
+              color: AppColors.primary,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              '${_speedValue.round()}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
               ),
-              // Text(
-              //   _currentSpeed.description,
-              //   style: TextStyle(
-              //     fontSize: 14,
-              //     color: Colors.blue[700],
-              //     fontWeight: FontWeight.w500,
-              //   ),
-              // ),
-            ],
+            ),
           ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Text('0', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
-              Expanded(
+          const SizedBox(height: 6),
+          // Min/Max labels (trên cùng - Max)
+          Text(
+            'Max',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.7),
+              fontSize: 9,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          Text('63', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 9)),
+          const SizedBox(height: 4),
+          // Slider dọc - giảm chiều cao
+          SizedBox(
+            height: 140,
+            child: RotatedBox(
+              quarterTurns: 3,
+              child: SliderTheme(
+                data: SliderThemeData(
+                  trackHeight: 3,
+                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                  overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+                  activeTrackColor: AppColors.primary,
+                  inactiveTrackColor: Colors.white.withOpacity(0.3),
+                  thumbColor: Colors.white,
+                  overlayColor: AppColors.primary.withOpacity(0.3),
+                ),
                 child: Slider(
-                  value: _speedValue,
+                  value: _speedValue, // Giá trị thực: kéo lên = tăng, kéo xuống = giảm
                   min: 0.0,
                   max: 63.0,
                   divisions: 63,
-                  activeColor: AppColors.primary,
                   onChanged: (value) {
                     setState(() {
-                      _speedValue = value;
+                      _speedValue = value; // Lưu giá trị trực tiếp
                     });
                   },
                 ),
               ),
-              Text('63', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
-            ],
+            ),
           ),
-          // Center(
-          //   child: Text(
-          //     'Speed: ${_speedValue.round()}',
-          //     style: TextStyle(
-          //       fontSize: 14,
-          //       color: Colors.blue[700],
-          //       fontWeight: FontWeight.w500,
-          //     ),
-          //   ),
-          // ),
+          const SizedBox(height: 4),
+          // Min/Max labels (dưới cùng - Min)
+          Text(
+            'Min',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.7),
+              fontSize: 9,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          Text('0', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 9)),
         ],
       ),
     );
   }
 
   Widget _buildPTZControl() {
-    // return Container(
-    //   padding: const EdgeInsets.all(16),
-    //   decoration: BoxDecoration(
-    //     color: AppColors.surface,
-    //     borderRadius: BorderRadius.circular(AppBorderRadius.medium),
-    //     border: Border.all(color: AppColors.border),
-    //     boxShadow: AppShadows.cardShadow,
-    //   ),
-    //   child: Column(
-    //     children: [
-    //       Text(
-    //         'Điều khiển Camera',
-    //         style: AppTextStyles.bodyLarge.copyWith(
-    //           fontWeight: FontWeight.bold,
-    //           color: AppColors.textPrimary,
-    //         ),
-    //       ),
-    //       const SizedBox(height: 16),
-    //       SizedBox(
-    //         width: size,
-    //         height: size,
-    //         child: Stack(
-    //           alignment: Alignment.center,
-    //           children: [
-    //             // Outer D-pad circle (gradient)
-    //             Container(
-    //               width: size,
-    //               height: size,
-    //               decoration: BoxDecoration(shape: BoxShape.circle, gradient: AppGradients.primary),
-    //             ),
-    //             // Up
-    //             Positioned(
-    //               top: 8,
-    //               child: _dpadTouchArea(
-    //                 onTap: () => _sendPTZCommand(CameraControlCommand.up),
-    //                 size: btnSize,
-    //               ),
-    //             ),
-    //             // Down
-    //             Positioned(
-    //               bottom: 8,
-    //               child: _dpadTouchArea(
-    //                 onTap: () => _sendPTZCommand(CameraControlCommand.down),
-    //                 size: btnSize,
-    //               ),
-    //             ),
-    //             // Left
-    //             Positioned(
-    //               left: 8,
-    //               child: _dpadTouchArea(
-    //                 onTap: () => _sendPTZCommand(CameraControlCommand.left),
-    //                 size: btnSize,
-    //               ),
-    //             ),
-    //             // Right
-    //             Positioned(
-    //               right: 8,
-    //               child: _dpadTouchArea(
-    //                 onTap: () => _sendPTZCommand(CameraControlCommand.right),
-    //                 size: btnSize,
-    //               ),
-    //             ),
-    //             // Up-Left
-    //             Positioned(
-    //               top: 28,
-    //               left: 28,
-    //               child: _dpadTouchArea(
-    //                 onTap: () => _sendPTZCommand(CameraControlCommand.upLeft),
-    //                 size: btnSize * 0.85,
-    //               ),
-    //             ),
-    //             // Up-Right
-    //             Positioned(
-    //               top: 28,
-    //               right: 28,
-    //               child: _dpadTouchArea(
-    //                 onTap: () => _sendPTZCommand(CameraControlCommand.upRight),
-    //                 size: btnSize * 0.85,
-    //               ),
-    //             ),
-    //             // Down-Left
-    //             Positioned(
-    //               bottom: 28,
-    //               left: 28,
-    //               child: _dpadTouchArea(
-    //                 onTap: () => _sendPTZCommand(CameraControlCommand.downLeft),
-    //                 size: btnSize * 0.85,
-    //               ),
-    //             ),
-    //             // Down-Right
-    //             Positioned(
-    //               bottom: 28,
-    //               right: 28,
-    //               child: _dpadTouchArea(
-    //                 onTap: () => _sendPTZCommand(CameraControlCommand.downRight),
-    //                 size: btnSize * 0.85,
-    //               ),
-    //             ),
-    //             // Center OK/STOP button
-    //             GestureDetector(
-    //               onTap: _stopPTZ,
-    //               child: Container(
-    //                 width: centerSize,
-    //                 height: centerSize,
-    //                 decoration: BoxDecoration(
-    //                   color: centerColor,
-    //                   shape: BoxShape.circle,
-    //                   border: Border.all(color: Colors.white, width: 2),
-    //                   boxShadow: [
-    //                     BoxShadow(
-    //                       color: Colors.white.withOpacity(0.08),
-    //                       blurRadius: 8,
-    //                       offset: const Offset(0, 4),
-    //                     ),
-    //                   ],
-    //                 ),
-    //                 child: Center(
-    //                   child: Text(
-    //                     'OK',
-    //                     style: AppTextStyles.bodyLarge.copyWith(
-    //                       color: centerTextColor,
-    //                       fontWeight: FontWeight.bold,
-    //                     ),
-    //                   ),
-    //                 ),
-    //               ),
-    //             ),
-    //           ],
-    //         ),
-    //       ),
-    //     ],
-    //   ),
-    // );
-
     return SizedBox(
-      width: 200,
-      height: 200,
+      width: 160,
+      height: 160,
       child: Stack(
         children: [
           Image.asset('assets/img_d_pad.png'),
           Positioned(
-            top: 70,
-            left: 70,
-            height: 60,
-            width: 60,
-            child: InkWell(
-              onTap: () => _captureImage(),
-              child: Image.asset('assets/ic_take_screen.png', width: 60, height: 60),
-            ),
-          ),
-          //top
-          Positioned(
             top: 0,
-            left: 70,
-            height: 60,
-            width: 60,
+            left: 55,
+            height: 50,
+            width: 50,
             child: GestureDetector(
               onTapDown: (_) => _sendPTZCommand(CameraControlCommand.up),
               onTapUp: (_) => _sendStopCommand(),
@@ -868,9 +851,9 @@ class _OnvifCameraPageState extends State<OnvifCameraPage> {
           //bottom
           Positioned(
             bottom: 0,
-            left: 70,
-            height: 60,
-            width: 60,
+            left: 55,
+            height: 50,
+            width: 50,
             child: GestureDetector(
               onTapDown: (_) => _sendPTZCommand(CameraControlCommand.down),
               onTapUp: (_) => _sendStopCommand(),
@@ -879,10 +862,10 @@ class _OnvifCameraPageState extends State<OnvifCameraPage> {
           ),
           //left
           Positioned(
-            top: 70,
+            top: 55,
             left: 0,
-            height: 60,
-            width: 60,
+            height: 50,
+            width: 50,
             child: GestureDetector(
               onTapDown: (_) => _sendPTZCommand(CameraControlCommand.left),
               onTapUp: (_) => _sendStopCommand(),
@@ -891,10 +874,10 @@ class _OnvifCameraPageState extends State<OnvifCameraPage> {
           ),
           //right
           Positioned(
-            top: 70,
+            top: 55,
             right: 0,
-            height: 60,
-            width: 60,
+            height: 50,
+            width: 50,
             child: GestureDetector(
               onTapDown: (_) => _sendPTZCommand(CameraControlCommand.right),
               onTapUp: (_) => _sendStopCommand(),
@@ -905,50 +888,6 @@ class _OnvifCameraPageState extends State<OnvifCameraPage> {
       ),
     );
   }
-
-  // Widget _buildCaptureButton() {
-  //   return GestureDetector(
-  //     onTap: _captureImage,
-  //     child: Container(
-  //       padding: const EdgeInsets.all(8),
-  //       decoration: BoxDecoration(
-  //         color: AppColors.surface,
-  //         borderRadius: BorderRadius.circular(AppBorderRadius.medium),
-  //         border: Border.all(color: AppColors.border),
-  //         boxShadow: AppShadows.cardShadow,
-  //       ),
-  //       child: Row(
-  //         children: [
-  //           Center(
-  //             child: Container(
-  //               padding: const EdgeInsets.all(8),
-  //               decoration: BoxDecoration(
-  //                 color: AppColors.success,
-  //                 shape: BoxShape.circle,
-  //                 boxShadow: [
-  //                   BoxShadow(
-  //                     color: AppColors.success.withOpacity(0.3),
-  //                     blurRadius: 8,
-  //                     offset: const Offset(0, 4),
-  //                   ),
-  //                 ],
-  //               ),
-  //               child: const Icon(Icons.camera_alt, color: Colors.white, size: 24),
-  //             ),
-  //           ),
-  //           const SizedBox(width: 16),
-  //           Text(
-  //             'Lưu ảnh',
-  //             style: AppTextStyles.bodyLarge.copyWith(
-  //               fontWeight: FontWeight.bold,
-  //               color: AppColors.textPrimary,
-  //             ),
-  //           ),
-  //         ],
-  //       ),
-  //     ),
-  //   );
-  // }
 
   Widget _buildLoadingPlaceholder() {
     return Container(
