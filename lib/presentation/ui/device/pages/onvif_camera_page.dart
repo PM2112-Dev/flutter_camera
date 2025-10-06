@@ -646,7 +646,7 @@ class _OnvifCameraPageState extends State<OnvifCameraPage> {
 
               // PTZ Control Panel (góc dưới bên trái)
               if (_showControls && widget.ptzType.toLowerCase() == 'ptz')
-                Positioned(bottom: 80, left: 80, child: _buildPTZControl()),
+                Positioned(bottom: 50, left: 90, child: _buildPTZControl()),
 
               // Speed Control Panel (góc dưới bên phải) - dịch xuống để tránh camera icon
               if (_showControls && widget.ptzType.toLowerCase() == 'ptz')
@@ -688,12 +688,11 @@ class _OnvifCameraPageState extends State<OnvifCameraPage> {
       left: 0,
       right: 0,
       child: Container(
-        height: 60,
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.3),
+          color: Colors.black.withOpacity(0.2),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.5),
+              color: Colors.black.withOpacity(0.4),
               blurRadius: 10,
               offset: const Offset(0, -2),
             ),
@@ -744,11 +743,11 @@ class _OnvifCameraPageState extends State<OnvifCameraPage> {
       width: 70,
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.7),
+        color: Colors.black.withOpacity(0.3),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.white.withOpacity(0.3), width: 1),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 10, spreadRadius: 2),
+          BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 10, spreadRadius: 2),
         ],
       ),
       child: Column(
@@ -836,7 +835,7 @@ class _OnvifCameraPageState extends State<OnvifCameraPage> {
       height: 160,
       child: Stack(
         children: [
-          Image.asset('assets/img_d_pad.png'),
+          Image.asset('assets/img_d_pad_1.png'),
           Positioned(
             top: 0,
             left: 55,

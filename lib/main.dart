@@ -12,6 +12,9 @@ import 'package:flutter_camera/presentation/ui/home/pages/home_page.dart';
 import 'package:flutter_camera/presentation/ui/login/page/login_page.dart';
 import 'package:flutter_camera/presentation/ui/shared/design_system.dart';
 
+// Global navigator key for navigation from services
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
@@ -39,6 +42,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'MTKVision',
       theme: AppTheme.lightTheme,
+      navigatorKey: navigatorKey, // Add global navigator key
       home: const AppInitializer(),
       routes: routes,
     );
