@@ -31,6 +31,7 @@ class FirebaseMessagingService {
   String? _fcmToken;
   bool _isInitialized = false;
   User? _currentUser;
+  Map<String, String>? _pendingNavigation;
 
   FirebaseMessagingService(this._userTokenApi, this._authPreference, this._notificationPreference);
 
@@ -160,6 +161,9 @@ class FirebaseMessagingService {
       print('🔄 Firebase: User available after initialization, sending token to server...');
       await _sendTokenToServer();
     }
+
+    // Check for pending navigation after app is ready
+    checkPendingNavigation();
   }
 
   /// Gửi FCM token lên server (luôn gửi, không so sánh với token cũ)
@@ -254,6 +258,9 @@ class FirebaseMessagingService {
         if (androidPlugin != null) {
           await androidPlugin.createNotificationChannel(channel);
           print('✅ Android notification channel created');
+          print('📱 Channel ID: high_importance_channel');
+          print('📱 Channel importance: max');
+          print('📱 Channel sound: system default');
         }
       }
 
@@ -280,11 +287,12 @@ class FirebaseMessagingService {
           print('🧭 Navigating to notification detail');
           print('🧭 Type: $type, ID: $id, DataTime: $dataTime');
 
-          // Navigate to notification detail page
-          main_app.navigatorKey.currentState?.pushNamed(
-            AppRoutes.notificationDetail,
-            arguments: {'id': id, 'dataTime': dataTime},
-          );
+          // Store navigation data for later use
+          _pendingNavigation = {'type': type, 'id': id, 'dataTime': dataTime};
+          print('📝 Stored pending navigation data');
+
+          // Try to navigate immediately, if fails, it will be handled when app is ready
+          _tryNavigateToDetail();
         } else {
           print('⚠️ Invalid payload format: ${response.payload}');
         }
@@ -317,6 +325,29 @@ class FirebaseMessagingService {
     print('🔔 Title: ${notification.title}');
     print('🔔 Body: ${notification.body}');
     print('🔔 Data: ${message.data}');
+    print('🔔 Sound enabled: ${_notificationPreference.soundEnabled}');
+    print('🔔 Vibration enabled: ${_notificationPreference.vibrationEnabled}');
+    print('🔔 Platform: ${Platform.isAndroid ? "Android" : "iOS"}');
+    print('🔔 Force sound: true');
+
+    // 🔍 DEBUG: Check server payload for sound
+    print('🔍 Server payload analysis:');
+    print('🔍 - notification.title: ${notification.title}');
+    print('🔍 - notification.body: ${notification.body}');
+    print('🔍 - message.data: ${message.data}');
+
+    // ⚠️ IMPORTANT: For iOS background notifications, sound comes from server payload
+    if (Platform.isIOS) {
+      final String? soundFromData = message.data['sound'];
+      if (soundFromData != null) {
+        print('✅ iOS: Server provided sound: $soundFromData');
+      } else {
+        print(
+          '⚠️ iOS: Server did NOT provide sound field - background notifications will be SILENT!',
+        );
+        print('💡 Server needs to include "sound": "default" in notification payload');
+      }
+    }
 
     // Extract notification data for navigation
     final String? id = message.data['id'];
@@ -330,7 +361,7 @@ class FirebaseMessagingService {
       print('🔔 Payload created: $payload');
     }
 
-    // Android notification details - respect user settings
+    // Android notification details - force sound for foreground notifications
     final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       'high_importance_channel',
       'High Importance Notifications',
@@ -338,21 +369,26 @@ class FirebaseMessagingService {
       importance: Importance.max,
       priority: Priority.high,
       showWhen: true,
-      playSound: _notificationPreference.soundEnabled,
+      playSound: true, // ✅ Force sound ON for foreground notifications
       enableVibration: _notificationPreference.vibrationEnabled,
       enableLights: true,
       icon: '@mipmap/ic_launcher',
       ticker: 'New notification',
-      // Đảm bảo có âm thanh mặc định
-      sound: const RawResourceAndroidNotificationSound('notification'),
+      // Đảm bảo có âm thanh mặc định (sử dụng system default)
+      sound: null, // Sử dụng âm thanh mặc định của hệ thống
+      // Thêm settings để đảm bảo hiển thị
+      visibility: NotificationVisibility.public,
+      category: AndroidNotificationCategory.alarm,
+      autoCancel: true,
+      ongoing: false,
     );
 
-    // iOS notification details - respect user settings
+    // iOS notification details - force sound for foreground notifications
     final DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
       presentAlert: true,
       presentBadge: true,
-      presentSound: _notificationPreference.soundEnabled,
-      sound: _notificationPreference.soundEnabled ? 'default' : 'default',
+      presentSound: true, // ✅ Force sound ON for foreground notifications
+      sound: 'default', // ✅ Always use default sound
       // Đảm bảo có âm thanh mặc định
       interruptionLevel: InterruptionLevel.active,
     );
@@ -371,9 +407,11 @@ class FirebaseMessagingService {
         payload: payload,
       );
 
-      print(
-        '✅ Local notification shown (sound: ${_notificationPreference.soundEnabled}, vibration: ${_notificationPreference.vibrationEnabled})',
-      );
+      print('✅ Local notification shown successfully');
+      print('🔊 Force sound: true (regardless of user setting)');
+      print('📱 Notification channel: high_importance_channel');
+      print('🔔 User sound setting: ${_notificationPreference.soundEnabled}');
+      print('📳 User vibration setting: ${_notificationPreference.vibrationEnabled}');
     } catch (e) {
       print('⚠️ Failed to show notification: $e');
     }
@@ -432,15 +470,17 @@ class FirebaseMessagingService {
     final String? type = message.data['type'];
 
     if (id != null && dataTime != null) {
-      print('🧭 Navigating to notification detail from background/terminated state');
+      print('🧭 Storing navigation data from background/terminated state');
       print('🧭 Type: $type, ID: $id, DataTime: $dataTime');
 
-      // Use a slight delay to ensure navigation is ready
+      // Store navigation data for later use when app is ready
+      _pendingNavigation = {'type': type ?? '', 'id': id, 'dataTime': dataTime};
+      print('📝 Stored pending navigation data from background');
+
+      // Try to navigate immediately with a small delay to ensure app is ready
+      print('🧭 Attempting immediate navigation...');
       Future.delayed(const Duration(milliseconds: 500), () {
-        main_app.navigatorKey.currentState?.pushNamed(
-          AppRoutes.notificationDetail,
-          arguments: {'id': id, 'dataTime': dataTime},
-        );
+        _tryNavigateToDetail();
       });
     }
 
@@ -560,11 +600,59 @@ class FirebaseMessagingService {
         print('❌ Firebase: Failed to get FCM token: $e');
       }
     }
+
+    // Check for pending navigation after user login
+    checkPendingNavigation();
   }
 
   /// Xóa thông tin user hiện tại (khi logout)
   void clearCurrentUser() {
     print('🧹 Firebase: Clearing current user');
     _currentUser = null;
+  }
+
+  /// Thử navigate đến notification detail
+  void _tryNavigateToDetail() {
+    if (_pendingNavigation == null) {
+      print('🧭 No pending navigation data');
+      return;
+    }
+
+    try {
+      final id = _pendingNavigation!['id'];
+      final dataTime = _pendingNavigation!['dataTime'];
+
+      if (id != null && dataTime != null) {
+        print('🧭 Attempting navigation to notification detail');
+        print('🧭 NavigatorKey available: ${main_app.navigatorKey.currentState != null}');
+        print('🧭 Route: ${AppRoutes.notificationDetail}');
+        print('🧭 Arguments: {id: $id, dataTime: $dataTime}');
+
+        final navigator = main_app.navigatorKey.currentState;
+        if (navigator != null) {
+          navigator.pushNamed(
+            AppRoutes.notificationDetail,
+            arguments: {'id': id, 'dataTime': dataTime},
+          );
+          print('✅ Navigation successful');
+          _pendingNavigation = null; // Clear after successful navigation
+        } else {
+          print('⚠️ Navigator not ready, keeping pending navigation');
+        }
+      } else {
+        print('⚠️ Missing navigation data: id=$id, dataTime=$dataTime');
+      }
+    } catch (e) {
+      print('❌ Navigation failed: $e');
+      // Keep pending navigation for retry later
+    }
+  }
+
+  /// Check và thực hiện pending navigation (gọi khi app ready)
+  void checkPendingNavigation() {
+    if (_pendingNavigation != null) {
+      print('🔄 Checking pending navigation...');
+      _tryNavigateToDetail();
+    }
   }
 }
