@@ -270,10 +270,7 @@ class FirebaseMessagingService {
           // Navigate to notification detail page
           main_app.navigatorKey.currentState?.pushNamed(
             AppRoutes.notificationDetail,
-            arguments: {
-              'id': id,
-              'dataTime': dataTime,
-            },
+            arguments: {'id': id, 'dataTime': dataTime},
           );
         } else {
           print('⚠️ Invalid payload format: ${response.payload}');
@@ -424,10 +421,7 @@ class FirebaseMessagingService {
       Future.delayed(const Duration(milliseconds: 500), () {
         main_app.navigatorKey.currentState?.pushNamed(
           AppRoutes.notificationDetail,
-          arguments: {
-            'id': id,
-            'dataTime': dataTime,
-          },
+          arguments: {'id': id, 'dataTime': dataTime},
         );
       });
     }
