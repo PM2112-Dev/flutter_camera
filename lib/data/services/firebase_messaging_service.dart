@@ -113,8 +113,9 @@ class FirebaseMessagingService {
       print('📋 Firebase: Token length: ${_fcmToken?.length ?? 0} characters');
 
       if (_fcmToken != null) {
-        print('📤 Firebase: Registering token with server...');
-        await _sendTokenToServer();
+        print('🔑 Firebase: FCM Token ready - will be sent to server when user logs in');
+        // Không tự động gửi token lên server, chỉ lưu token
+        // Token sẽ được gửi khi user login thông qua registerTokenForNewUser()
       } else {
         print('⚠️ Firebase: FCM Token is null!');
         print('⚠️ Firebase: This might be because APNS token is not set yet');
@@ -126,7 +127,16 @@ class FirebaseMessagingService {
         print('🔄 Firebase: Token refreshed: $token');
         print('📋 Firebase: New token length: ${token.length} characters');
         _fcmToken = token;
-        await _sendTokenToServer();
+
+        // Chỉ gửi token refresh nếu user đã login
+        if (_currentUser != null) {
+          print('🔄 Firebase: Sending refreshed token to server...');
+          await _sendTokenToServer();
+        } else {
+          print(
+            '🔄 Firebase: Token refreshed but user not logged in - token will be sent when user logs in',
+          );
+        }
       });
     } catch (e) {
       print('❌ Firebase: Token setup error: $e');
@@ -139,7 +149,10 @@ class FirebaseMessagingService {
   }
 
   Future<void> _sendTokenToServer() async {
-    if (_fcmToken == null) return;
+    if (_fcmToken == null) {
+      print('⚠️ Firebase: No FCM token available, skipping server registration');
+      return;
+    }
 
     try {
       final tokens = _authPreference.getTokens();
@@ -153,6 +166,10 @@ class FirebaseMessagingService {
         print('⚠️ Firebase: No current user available, skipping server registration');
         return;
       }
+
+      print(
+        '📤 Firebase: Attempting to send FCM token to server for user ${_currentUser!.username}',
+      );
 
       // Lấy FCM token cũ đã lưu
       final savedToken = _authPreference.getFcmToken();
@@ -460,15 +477,13 @@ class FirebaseMessagingService {
     }
   }
 
-  /// Cập nhật thông tin user hiện tại và đăng ký lại FCM token
+  /// Cập nhật thông tin user hiện tại
   Future<void> updateCurrentUser(User user) async {
     print('👤 Firebase: Updating current user to ${user.username} (ID: ${user.id})');
     _currentUser = user;
 
-    // Re-register FCM token with new user
-    if (_fcmToken != null) {
-      await _sendTokenToServer();
-    }
+    // Không tự động gửi token ở đây
+    // Token sẽ được gửi thông qua registerTokenForNewUser() khi cần thiết
   }
 
   /// Hủy đăng ký FCM token khi logout
@@ -502,7 +517,29 @@ class FirebaseMessagingService {
   /// Đăng ký lại FCM token cho user mới (sau khi login)
   Future<void> registerTokenForNewUser(User user) async {
     print('🔄 Firebase: Registering token for new user ${user.username}');
-    await updateCurrentUser(user);
+    _currentUser = user;
+
+    // Force re-registration bằng cách clear saved token để đảm bảo gửi lên server
+    await _authPreference.clearFcmToken();
+    print('🧹 Firebase: Cleared saved token to force re-registration');
+
+    // Gửi token lên server
+    if (_fcmToken != null) {
+      print('📤 Firebase: Sending FCM token to server for user ${user.username}');
+      await _sendTokenToServer();
+    } else {
+      print('⚠️ Firebase: No FCM token available to send to server');
+      // Nếu chưa có token, thử lấy lại
+      try {
+        _fcmToken = await messaging.getToken();
+        if (_fcmToken != null) {
+          print('🔑 Firebase: Retrieved FCM token, sending to server...');
+          await _sendTokenToServer();
+        }
+      } catch (e) {
+        print('❌ Firebase: Failed to get FCM token: $e');
+      }
+    }
   }
 
   /// Xóa thông tin user hiện tại (khi logout)
