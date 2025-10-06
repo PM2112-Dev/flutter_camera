@@ -377,9 +377,8 @@ class FirebaseMessagingService {
       print('📨 Firebase: CollapseKey: ${message.collapseKey}');
 
       // ✅ Show local notification when app is in foreground
+      // Don't auto-navigate - wait for user to tap the notification
       _showLocalNotification(message);
-
-      _handleMessage(message);
     });
 
     // Handle message when app is opened from notification
