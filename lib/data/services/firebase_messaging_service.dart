@@ -1,10 +1,14 @@
 import 'dart:io';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_camera/data/network/api/user_token_api_service.dart';
 import 'package:flutter_camera/data/local/preference/auth_local_preference.dart';
 import 'package:flutter_camera/domain/model/user.dart';
+import 'package:flutter_camera/presentation/ui/notification/pages/notification_detail_page.dart';
 import 'package:injectable/injectable.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_camera/main.dart' as main_app;
 
 // Background message handler - phải là top-level function
 @pragma('vm:entry-point')
@@ -21,6 +25,7 @@ class FirebaseMessagingService {
   FirebaseMessaging? _messaging;
   final UserTokenApiService _userTokenApi;
   final AuthLocalPreference _authPreference;
+  final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
 
   String? _fcmToken;
   bool _isInitialized = false;
@@ -46,6 +51,9 @@ class FirebaseMessagingService {
       // Initialize Firebase Messaging instance
       _messaging = FirebaseMessaging.instance;
       print('🔥 Firebase: Messaging instance created');
+
+      // Initialize local notifications
+      await _initializeLocalNotifications();
 
       // Set background message handler
       FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
@@ -188,6 +196,100 @@ class FirebaseMessagingService {
     }
   }
 
+  Future<void> _initializeLocalNotifications() async {
+    print('🔔 Initializing local notifications...');
+
+    // Android initialization settings
+    const AndroidInitializationSettings androidSettings = AndroidInitializationSettings(
+      '@mipmap/ic_launcher',
+    );
+
+    // iOS initialization settings
+    const DarwinInitializationSettings iosSettings = DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
+    );
+
+    const InitializationSettings settings = InitializationSettings(
+      android: androidSettings,
+      iOS: iosSettings,
+    );
+
+    await _localNotifications.initialize(
+      settings,
+      onDidReceiveNotificationResponse: _onNotificationTapped,
+    );
+    print('✅ Local notifications initialized');
+  }
+
+  // Handle notification tap
+  void _onNotificationTapped(NotificationResponse response) {
+    print('🔔 Notification tapped');
+    print('🔔 Payload: ${response.payload}');
+
+    if (response.payload != null) {
+      _navigateToNotificationDetail(response.payload!);
+    }
+  }
+
+  Future<void> _showLocalNotification(RemoteMessage message) async {
+    final notification = message.notification;
+    if (notification == null) {
+      print('⚠️ No notification data to display');
+      return;
+    }
+
+    print('🔔 Showing local notification');
+    print('🔔 Title: ${notification.title}');
+    print('🔔 Body: ${notification.body}');
+    print('🔔 Data: ${message.data}');
+
+    // Extract notification data for navigation
+    final String? id = message.data['id'];
+    final String? dataTime = message.data['dataTime'];
+    final String? type = message.data['type'];
+
+    // Create payload for navigation (JSON string format)
+    String? payload;
+    if (id != null && dataTime != null) {
+      payload = '$type|$id|$dataTime';
+      print('🔔 Payload created: $payload');
+    }
+
+    // Android notification details
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'high_importance_channel', // channel ID
+      'High Importance Notifications', // channel name
+      channelDescription: 'This channel is used for important notifications',
+      importance: Importance.high,
+      priority: Priority.high,
+      showWhen: true,
+    );
+
+    // iOS notification details
+    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    const NotificationDetails details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    await _localNotifications.show(
+      message.hashCode, // notification ID
+      notification.title ?? 'Thông báo',
+      notification.body ?? '',
+      details,
+      payload: payload, // Add payload for tap handling
+    );
+
+    print('✅ Local notification shown');
+  }
+
   Future<void> _setupMessageHandlers() async {
     print('📨 Firebase: Setting up message handlers...');
 
@@ -202,17 +304,21 @@ class FirebaseMessagingService {
       print('📨 Firebase: Category: ${message.category}');
       print('📨 Firebase: CollapseKey: ${message.collapseKey}');
 
+      // Show local notification when app is in foreground
+      _showLocalNotification(message);
+
       _handleMessage(message);
     });
 
-    // Handle message when app is opened from notification
+    // Handle message when app is opened from notification (background state)
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      print('📨 Firebase: Message opened app');
+      print('📨 Firebase: Message opened app (from background)');
       print('📨 Firebase: messageId: ${message.messageId}');
       print('📨 Firebase: Title: ${message.notification?.title}');
       print('📨 Firebase: Body: ${message.notification?.body}');
       print('📨 Firebase: Data: ${message.data}');
 
+      // Navigate to detail page
       _handleMessage(message);
     });
 
@@ -221,30 +327,78 @@ class FirebaseMessagingService {
     if (initialMessage != null) {
       print('📨 Firebase: App opened from notification (terminated state)');
       print('📨 Firebase: messageId: ${initialMessage.messageId}');
-      _handleMessage(initialMessage);
+      print('📨 Firebase: Title: ${initialMessage.notification?.title}');
+      print('📨 Firebase: Body: ${initialMessage.notification?.body}');
+      print('📨 Firebase: Data: ${initialMessage.data}');
+
+      // Delay navigation to allow app to fully initialize
+      Future.delayed(const Duration(milliseconds: 500), () {
+        _handleMessage(initialMessage);
+      });
     }
 
     print('✅ Firebase: Message handlers setup complete');
   }
 
   void _handleMessage(RemoteMessage message) {
-    // Process notification data
-    // Có thể navigate đến specific screen based on message.data
+    print('📨 Handling message: ${message.data}');
 
-    if (message.data.containsKey('type')) {
-      switch (message.data['type']) {
-        case 'vision_alert':
-          print('🤖 Handling vision alert notification');
-          // Navigate to AI notifications
-          break;
-        case 'temperature_alert':
-          print('🌡️ Handling temperature alert notification');
-          // Navigate to temperature notifications
-          break;
-        default:
-          print('📨 Handling generic notification');
+    // Extract data from message
+    final String? id = message.data['id'];
+    final String? dataTime = message.data['dataTime'];
+    final String? type = message.data['type'];
+
+    print('📨 Extracted - Type: $type, ID: $id, DataTime: $dataTime');
+
+    // Navigate to detail page based on notification type
+    if (id != null && dataTime != null) {
+      if (type == 'thermal_notification') {
+        print('🌡️ Opening thermal notification detail');
+        _navigateToThermalNotification(id, dataTime);
+      } else {
+        print('📨 Unknown notification type: $type');
       }
+    } else {
+      print('⚠️ Missing id or dataTime in notification data');
     }
+  }
+
+  void _navigateToNotificationDetail(String payload) {
+    print('🧭 Navigating with payload: $payload');
+
+    // Parse payload format: "type|id|dataTime"
+    final parts = payload.split('|');
+    if (parts.length == 3) {
+      final type = parts[0];
+      final id = parts[1];
+      final dataTime = parts[2];
+
+      print('🧭 Parsed - Type: $type, ID: $id, DataTime: $dataTime');
+
+      if (type == 'thermal_notification') {
+        _navigateToThermalNotification(id, dataTime);
+      }
+    } else {
+      print('⚠️ Invalid payload format: $payload');
+    }
+  }
+
+  void _navigateToThermalNotification(String id, String dataTime) {
+    final context = main_app.navigatorKey.currentContext;
+    if (context == null) {
+      print('⚠️ Navigator context is null, cannot navigate');
+      return;
+    }
+
+    print('🧭 Navigating to NotificationDetailPage');
+    print('🧭 ID: $id');
+    print('🧭 DataTime: $dataTime');
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => NotificationDetailPage(notificationId: id, dataTime: dataTime),
+      ),
+    );
   }
 
   Future<void> subscribeToTopic(String topic) async {

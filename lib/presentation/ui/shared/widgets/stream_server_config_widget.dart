@@ -29,7 +29,7 @@ class _StreamServerConfigWidgetState extends State<StreamServerConfigWidget> {
       _portController.text = widget.initialConfig!.port.toString();
     } else {
       // Default values
-      _baseUrlController.text = 'thermal.mtktech.com.vn';
+      _baseUrlController.text = 'thermal.infosysvietnam.com.vn';
       _portController.text = '1984';
     }
   }
@@ -94,7 +94,7 @@ class _StreamServerConfigWidgetState extends State<StreamServerConfigWidget> {
               controller: _baseUrlController,
               decoration: InputDecoration(
                 labelText: 'Base URL',
-                hintText: 'thermal.mtktech.com.vn',
+                hintText: 'thermal.infosysvietnam.com.vn',
                 prefixIcon: const Icon(Icons.language),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppBorderRadius.medium),

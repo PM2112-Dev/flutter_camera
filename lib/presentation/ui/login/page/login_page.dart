@@ -224,7 +224,6 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
 
   Widget _buildTabBar() {
     return Container(
-      height: 56,
       margin: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.grey[100],
@@ -273,8 +272,8 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
         },
         behavior: HitTestBehavior.opaque,
         child: Container(
-          height: 48,
           alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(vertical: 12),
           child: AnimatedBuilder(
             animation: _tabController,
             builder: (context, child) {
