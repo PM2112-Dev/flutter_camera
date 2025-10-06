@@ -37,6 +37,8 @@
 	<string>This app needs permission to add images to your photo library</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>This app needs access to your photo library to save captured images</string>
+	<key>NSUserNotificationsUsageDescription</key>
+	<string>This app needs permission to send you notifications with sound</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIBackgroundModes</key>

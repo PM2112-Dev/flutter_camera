@@ -4,6 +4,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_camera/data/network/api/user_token_api_service.dart';
 import 'package:flutter_camera/data/local/preference/auth_local_preference.dart';
+import 'package:flutter_camera/data/local/preference/notification_preference.dart';
 import 'package:flutter_camera/domain/model/user.dart';
 import 'package:flutter_camera/presentation/ui/notification/pages/notification_detail_page.dart';
 import 'package:injectable/injectable.dart';
@@ -25,13 +26,14 @@ class FirebaseMessagingService {
   FirebaseMessaging? _messaging;
   final UserTokenApiService _userTokenApi;
   final AuthLocalPreference _authPreference;
+  final NotificationPreference _notificationPreference;
   final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
 
   String? _fcmToken;
   bool _isInitialized = false;
   User? _currentUser;
 
-  FirebaseMessagingService(this._userTokenApi, this._authPreference);
+  FirebaseMessagingService(this._userTokenApi, this._authPreference, this._notificationPreference);
 
   FirebaseMessaging get messaging {
     if (_messaging == null) {
@@ -197,30 +199,57 @@ class FirebaseMessagingService {
   }
 
   Future<void> _initializeLocalNotifications() async {
-    print('🔔 Initializing local notifications...');
+    try {
+      print('🔔 Initializing local notifications...');
 
-    // Android initialization settings
-    const AndroidInitializationSettings androidSettings = AndroidInitializationSettings(
-      '@mipmap/ic_launcher',
-    );
+      // Android initialization settings
+      const AndroidInitializationSettings androidSettings = AndroidInitializationSettings(
+        '@mipmap/ic_launcher',
+      );
 
-    // iOS initialization settings
-    const DarwinInitializationSettings iosSettings = DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
-    );
+      // iOS initialization settings
+      const DarwinInitializationSettings iosSettings = DarwinInitializationSettings(
+        requestAlertPermission: true,
+        requestBadgePermission: true,
+        requestSoundPermission: true,
+      );
 
-    const InitializationSettings settings = InitializationSettings(
-      android: androidSettings,
-      iOS: iosSettings,
-    );
+      const InitializationSettings settings = InitializationSettings(
+        android: androidSettings,
+        iOS: iosSettings,
+      );
 
-    await _localNotifications.initialize(
-      settings,
-      onDidReceiveNotificationResponse: _onNotificationTapped,
-    );
-    print('✅ Local notifications initialized');
+      await _localNotifications.initialize(
+        settings,
+        onDidReceiveNotificationResponse: _onNotificationTapped,
+      );
+
+      // Create Android notification channel with sound
+      if (Platform.isAndroid) {
+        const AndroidNotificationChannel channel = AndroidNotificationChannel(
+          'high_importance_channel', // id
+          'High Importance Notifications', // name
+          description: 'This channel is used for important notifications',
+          importance: Importance.max, // Use max importance for sound
+          playSound: true,
+          enableVibration: true,
+          showBadge: true,
+        );
+
+        final androidPlugin = _localNotifications
+            .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+
+        if (androidPlugin != null) {
+          await androidPlugin.createNotificationChannel(channel);
+          print('✅ Android notification channel created with sound enabled');
+        }
+      }
+
+      print('✅ Local notifications initialized');
+    } catch (e) {
+      print('⚠️ Local notifications initialization failed: $e');
+      print('⚠️ Continuing without local notifications...');
+    }
   }
 
   // Handle notification tap
@@ -234,6 +263,18 @@ class FirebaseMessagingService {
   }
 
   Future<void> _showLocalNotification(RemoteMessage message) async {
+    // ✅ Check notification settings first
+    if (!_notificationPreference.notificationsEnabled) {
+      print('🔕 Notifications are disabled by user, skipping notification');
+      return;
+    }
+
+    // Check if it's quiet hours
+    if (_notificationPreference.isQuietHours()) {
+      print('😴 Quiet hours active, skipping notification');
+      return;
+    }
+
     final notification = message.notification;
     if (notification == null) {
       print('⚠️ No notification data to display');
@@ -257,37 +298,49 @@ class FirebaseMessagingService {
       print('🔔 Payload created: $payload');
     }
 
-    // Android notification details
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'high_importance_channel', // channel ID
+    // Android notification details - respect user settings
+    final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'high_importance_channel', // channel ID (must match the channel created)
       'High Importance Notifications', // channel name
       channelDescription: 'This channel is used for important notifications',
-      importance: Importance.high,
+      importance: Importance.max, // Max importance ensures sound plays
       priority: Priority.high,
       showWhen: true,
+      playSound: _notificationPreference.soundEnabled, // ✅ Respect sound setting
+      enableVibration: _notificationPreference.vibrationEnabled, // ✅ Respect vibration setting
+      enableLights: true, // Enable LED notification light
+      icon: '@mipmap/ic_launcher', // Notification icon
+      ticker: 'New notification', // Accessibility ticker
     );
 
-    // iOS notification details
-    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+    // iOS notification details - respect user settings
+    final DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
       presentAlert: true,
       presentBadge: true,
-      presentSound: true,
+      presentSound: _notificationPreference.soundEnabled, // ✅ Respect sound setting
+      sound: _notificationPreference.soundEnabled ? 'default' : null, // ✅ Only set sound if enabled
     );
 
-    const NotificationDetails details = NotificationDetails(
+    final NotificationDetails details = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
     );
 
-    await _localNotifications.show(
-      message.hashCode, // notification ID
-      notification.title ?? 'Thông báo',
-      notification.body ?? '',
-      details,
-      payload: payload, // Add payload for tap handling
-    );
+    try {
+      await _localNotifications.show(
+        message.hashCode, // notification ID
+        notification.title ?? 'Thông báo',
+        notification.body ?? '',
+        details,
+        payload: payload, // Add payload for tap handling
+      );
 
-    print('✅ Local notification shown');
+      print(
+        '✅ Local notification shown (sound: ${_notificationPreference.soundEnabled}, vibration: ${_notificationPreference.vibrationEnabled})',
+      );
+    } catch (e) {
+      print('⚠️ Failed to show notification: $e');
+    }
   }
 
   Future<void> _setupMessageHandlers() async {
