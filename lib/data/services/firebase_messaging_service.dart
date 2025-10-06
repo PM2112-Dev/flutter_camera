@@ -162,6 +162,7 @@ class FirebaseMessagingService {
     }
   }
 
+  /// Gửi FCM token lên server (luôn gửi, không so sánh với token cũ)
   Future<void> _sendTokenToServer() async {
     if (_fcmToken == null) {
       print('⚠️ Firebase: No FCM token available, skipping server registration');
@@ -175,34 +176,17 @@ class FirebaseMessagingService {
         return;
       }
 
-      // Use current user ID if available, otherwise skip registration
+      // Chỉ gửi khi có user
       if (_currentUser == null) {
         print('⚠️ Firebase: No current user available, skipping server registration');
         return;
       }
 
-      print(
-        '📤 Firebase: Attempting to send FCM token to server for user ${_currentUser!.username}',
-      );
+      print('📤 Firebase: Sending FCM token to server for user ${_currentUser!.username}');
 
-      // Lấy FCM token cũ đã lưu
-      final savedToken = _authPreference.getFcmToken();
-
-      // So sánh token cũ và mới
-      if (savedToken == _fcmToken) {
-        print('ℹ️ Firebase: Token unchanged, skipping server registration');
-        print('📋 Firebase: Saved token: ${savedToken?.substring(0, 20)}...');
-        print('📋 Firebase: Current token: ${_fcmToken?.substring(0, 20)}...');
-        return;
-      }
-
-      print('🔄 Firebase: Token changed, sending to server...');
-      if (savedToken != null) {
-        print('📋 Firebase: Old token: ${savedToken.substring(0, 20)}...');
-      } else {
-        print('📋 Firebase: No saved token found (first time)');
-      }
-      print('📋 Firebase: New token: ${_fcmToken!.substring(0, 20)}...');
+      // Luôn gửi token lên server, không so sánh với token cũ
+      print('🔄 Firebase: Sending token to server (always send mode)...');
+      print('📋 Firebase: Token: ${_fcmToken!.substring(0, 20)}...');
 
       final success = await _userTokenApi.postUserToken(
         userId: _currentUser!.id.toString(),
@@ -214,14 +198,12 @@ class FirebaseMessagingService {
       );
 
       if (success) {
-        // Lưu token mới vào SharedPreferences sau khi gửi thành công
+        // Lưu token vào SharedPreferences sau khi gửi thành công
         await _authPreference.saveFcmToken(_fcmToken!);
-        print(
-          '✅ Firebase: Token registered with server successfully for user ${_currentUser!.username}',
-        );
-        print('💾 Firebase: New token saved to local storage');
+        print('✅ Firebase: Token sent to server successfully for user ${_currentUser!.username}');
+        print('💾 Firebase: Token saved to local storage');
       } else {
-        print('❌ Firebase: Failed to register token with server');
+        print('❌ Firebase: Failed to send token to server');
       }
     } catch (e) {
       print('❌ Firebase: Error sending token to server: $e');
@@ -533,9 +515,8 @@ class FirebaseMessagingService {
     print('🔄 Firebase: Registering token for new user ${user.username}');
     _currentUser = user;
 
-    // Force re-registration bằng cách clear saved token để đảm bảo gửi lên server
-    await _authPreference.clearFcmToken();
-    print('🧹 Firebase: Cleared saved token to force re-registration');
+    // Luôn gửi token lên server (không cần clear saved token)
+    print('📤 Firebase: Will send token to server for user ${user.username}');
 
     // Gửi token lên server
     if (_fcmToken != null) {
