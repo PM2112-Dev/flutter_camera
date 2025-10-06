@@ -10,6 +10,7 @@ import 'package:flutter_camera/presentation/bloc/auth/auth_state.dart';
 import 'package:flutter_camera/presentation/routes/app_routes.dart';
 import 'package:flutter_camera/presentation/ui/home/pages/home_page.dart';
 import 'package:flutter_camera/presentation/ui/login/page/login_page.dart';
+import 'package:flutter_camera/presentation/ui/notification/pages/notification_detail_page.dart';
 import 'package:flutter_camera/presentation/ui/shared/design_system.dart';
 
 // Global navigator key for navigation from services
@@ -45,6 +46,23 @@ class MyApp extends StatelessWidget {
       navigatorKey: navigatorKey, // Add global navigator key
       home: const AppInitializer(),
       routes: routes,
+      onGenerateRoute: (settings) {
+        // Handle routes that require arguments
+        switch (settings.name) {
+          case AppRoutes.notificationDetail:
+            final args = settings.arguments as Map<String, dynamic>?;
+            if (args != null && args.containsKey('id') && args.containsKey('dataTime')) {
+              return MaterialPageRoute(
+                builder: (_) => NotificationDetailPage(
+                  notificationId: args['id'] as String,
+                  dataTime: args['dataTime'] as String,
+                ),
+              );
+            }
+            break;
+        }
+        return null; // Let MaterialApp handle other routes
+      },
     );
   }
 }
