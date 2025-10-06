@@ -343,6 +343,8 @@ class FirebaseMessagingService {
       enableLights: true,
       icon: '@mipmap/ic_launcher',
       ticker: 'New notification',
+      // Đảm bảo có âm thanh mặc định
+      sound: const RawResourceAndroidNotificationSound('notification'),
     );
 
     // iOS notification details - respect user settings
@@ -350,7 +352,9 @@ class FirebaseMessagingService {
       presentAlert: true,
       presentBadge: true,
       presentSound: _notificationPreference.soundEnabled,
-      sound: _notificationPreference.soundEnabled ? 'default' : null,
+      sound: _notificationPreference.soundEnabled ? 'default' : 'default',
+      // Đảm bảo có âm thanh mặc định
+      interruptionLevel: InterruptionLevel.active,
     );
 
     final NotificationDetails details = NotificationDetails(
