@@ -43,7 +43,7 @@ class UserTokenApiService {
           'deviceType': deviceType,
           'token': token,
           'areaIds': areaIds,
-          'isAdmin': isAdmin,
+          'isAdmin': true,
         },
         options: Options(headers: headers),
       );

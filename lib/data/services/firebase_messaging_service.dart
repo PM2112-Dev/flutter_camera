@@ -197,7 +197,7 @@ class FirebaseMessagingService {
         deviceType: Platform.isAndroid ? "android" : "ios",
         token: _fcmToken!,
         areaIds: [],
-        isAdmin: _currentUser!.roleNames.toLowerCase().contains('admin'),
+        isAdmin: true,
         authToken: tokens?.accessToken ?? '',
       );
 
