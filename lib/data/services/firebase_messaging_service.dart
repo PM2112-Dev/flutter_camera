@@ -83,12 +83,18 @@ class FirebaseMessagingService {
         await _setupMessageHandlers();
         _isInitialized = true;
         print('✅ Firebase: Messaging initialization complete');
+
+        // Nếu đã có user, gửi token ngay lập tức
+        await _sendTokenIfUserAvailable();
       } else if (settings.authorizationStatus == AuthorizationStatus.provisional) {
         print('⚠️ Firebase: Permission is provisional');
         await _setupToken();
         await _setupMessageHandlers();
         _isInitialized = true;
         print('✅ Firebase: Messaging initialization complete (provisional)');
+
+        // Nếu đã có user, gửi token ngay lập tức
+        await _sendTokenIfUserAvailable();
       } else {
         print('❌ Firebase: Permission denied or not determined');
         print('❌ Firebase: Status: ${settings.authorizationStatus}');
@@ -145,6 +151,14 @@ class FirebaseMessagingService {
         print('❌ Firebase: APNS token not set - this is expected in simulator');
         print('❌ Firebase: Please test on a real iOS device');
       }
+    }
+  }
+
+  /// Gửi token nếu đã có user (được gọi sau khi Firebase khởi tạo xong)
+  Future<void> _sendTokenIfUserAvailable() async {
+    if (_currentUser != null && _fcmToken != null) {
+      print('🔄 Firebase: User available after initialization, sending token to server...');
+      await _sendTokenToServer();
     }
   }
 
@@ -529,12 +543,33 @@ class FirebaseMessagingService {
       await _sendTokenToServer();
     } else {
       print('⚠️ Firebase: No FCM token available to send to server');
-      // Nếu chưa có token, thử lấy lại
+
+      // Nếu Firebase chưa khởi tạo, đợi cho đến khi khởi tạo xong
+      if (!_isInitialized) {
+        print('⏳ Firebase: Waiting for Firebase to initialize...');
+        int attempts = 0;
+        const maxAttempts = 10;
+
+        while (!_isInitialized && attempts < maxAttempts) {
+          await Future.delayed(const Duration(milliseconds: 500));
+          attempts++;
+          print('⏳ Firebase: Waiting for initialization... (attempt $attempts/$maxAttempts)');
+        }
+
+        if (!_isInitialized) {
+          print('❌ Firebase: Failed to initialize within timeout');
+          return;
+        }
+      }
+
+      // Thử lấy lại token sau khi đã khởi tạo
       try {
         _fcmToken = await messaging.getToken();
         if (_fcmToken != null) {
           print('🔑 Firebase: Retrieved FCM token, sending to server...');
           await _sendTokenToServer();
+        } else {
+          print('❌ Firebase: Still no FCM token available after initialization');
         }
       } catch (e) {
         print('❌ Firebase: Failed to get FCM token: $e');
