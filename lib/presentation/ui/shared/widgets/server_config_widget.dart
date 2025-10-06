@@ -27,13 +27,9 @@ class _ServerConfigWidgetState extends State<ServerConfigWidget> {
   void initState() {
     super.initState();
     _baseUrlController = TextEditingController(
-      text:
-          widget.initialConfig?.baseUrl ??
-          'http://thermal.infosysvietnam.com.vn',
+      text: widget.initialConfig?.baseUrl ?? 'https://thermal.infosysvietnam.com.vn',
     );
-    _portController = TextEditingController(
-      text: widget.initialConfig?.port.toString() ?? '10253',
-    );
+    _portController = TextEditingController(text: widget.initialConfig?.port.toString() ?? '10253');
   }
 
   @override
@@ -84,9 +80,7 @@ class _ServerConfigWidgetState extends State<ServerConfigWidget> {
                 const SizedBox(height: 16),
                 Text(
                   'Please enter the server URL and port to connect to the thermal camera system.',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: Colors.grey[600],
-                  ),
+                  style: AppTextStyles.bodyMedium.copyWith(color: Colors.grey[600]),
                 ),
                 const SizedBox(height: 16),
               ],
@@ -96,11 +90,9 @@ class _ServerConfigWidgetState extends State<ServerConfigWidget> {
                 controller: _baseUrlController,
                 decoration: InputDecoration(
                   labelText: 'Server URL',
-                  hintText: 'http://thermal.infosysvietnam.com.vn',
+                  hintText: 'https://thermal.infosysvietnam.com.vn',
                   prefixIcon: const Icon(Icons.link),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                   filled: true,
                   fillColor: Colors.grey[50],
                 ),
@@ -108,8 +100,7 @@ class _ServerConfigWidgetState extends State<ServerConfigWidget> {
                   if (value == null || value.trim().isEmpty) {
                     return 'Please enter server URL';
                   }
-                  if (!value.startsWith('http://') &&
-                      !value.startsWith('https://')) {
+                  if (!value.startsWith('http://') && !value.startsWith('https://')) {
                     return 'URL must start with http:// or https://';
                   }
                   return null;
@@ -125,9 +116,7 @@ class _ServerConfigWidgetState extends State<ServerConfigWidget> {
                   labelText: 'Port',
                   hintText: '10253',
                   prefixIcon: const Icon(Icons.router),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                   filled: true,
                   fillColor: Colors.grey[50],
                 ),
@@ -157,9 +146,7 @@ class _ServerConfigWidgetState extends State<ServerConfigWidget> {
                     backgroundColor: Colors.blue[600],
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                 ),
               ),
@@ -180,18 +167,12 @@ class _ServerConfigWidgetState extends State<ServerConfigWidget> {
                     const SizedBox(width: 8),
                     Text(
                       'Preview: ',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue[700],
-                      ),
+                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue[700]),
                     ),
                     Expanded(
                       child: Text(
                         '${_baseUrlController.text}:${_portController.text}',
-                        style: TextStyle(
-                          color: Colors.blue[800],
-                          fontFamily: 'monospace',
-                        ),
+                        style: TextStyle(color: Colors.blue[800], fontFamily: 'monospace'),
                       ),
                     ),
                   ],

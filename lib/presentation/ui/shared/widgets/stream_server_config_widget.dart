@@ -156,7 +156,7 @@ class _StreamServerConfigWidgetState extends State<StreamServerConfigWidget> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'http://${_baseUrlController.text}:${_portController.text}/api/stream.m3u8',
+                    'https://${_baseUrlController.text}:${_portController.text}/api/stream.m3u8',
                     style: AppTextStyles.bodySmall.copyWith(
                       color: AppColors.textPrimary,
                       fontFamily: 'monospace',

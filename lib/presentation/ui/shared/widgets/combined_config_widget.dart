@@ -51,7 +51,7 @@ class _CombinedConfigWidgetState extends State<CombinedConfigWidget> {
       _streamBaseUrlController.text = widget.initialStreamConfig!.baseUrl;
       _streamPortController.text = widget.initialStreamConfig!.port.toString();
     } else {
-      _streamBaseUrlController.text = 'https://thermal.infosysvietnam.com.vn';
+      _streamBaseUrlController.text = 'thermal.infosysvietnam.com.vn';
       _streamPortController.text = '1984';
     }
   }
