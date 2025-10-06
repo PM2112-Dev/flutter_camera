@@ -98,8 +98,8 @@ class AuthLocalPreference {
       if (baseUrl.startsWith('http://') || baseUrl.startsWith('https://')) {
         return '$baseUrl:$port';
       } else {
-        // Default to http if no protocol specified
-        return 'http://$baseUrl:$port';
+        // Default to https if no protocol specified
+        return 'https://$baseUrl:$port';
       }
     }
     return 'https://thermal.infosysvietnam.com.vn:10253'; // Default fallback with HTTPS
@@ -136,11 +136,11 @@ class AuthLocalPreference {
       if (baseUrl.startsWith('http://') || baseUrl.startsWith('https://')) {
         return '$baseUrl:$port';
       } else {
-        // Default to http if no protocol specified
-        return 'http://$baseUrl:$port';
+        // Default to https if no protocol specified
+        return 'https://$baseUrl:$port';
       }
     }
-    return 'http://thermal.infosysvietnam.com.vn:1984'; // Default fallback with HTTPS
+    return 'https://thermal.infosysvietnam.com.vn:1984'; // Default fallback with HTTPS
   }
 
   Future<void> clearStreamServerConfig() async {
@@ -155,9 +155,9 @@ class AuthLocalPreference {
       url = url.substring(0, url.length - 1);
     }
 
-    // If no protocol specified, default to http://
+    // If no protocol specified, default to https://
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      url = 'http://$url';
+      url = 'https://$url';
     }
 
     return url;

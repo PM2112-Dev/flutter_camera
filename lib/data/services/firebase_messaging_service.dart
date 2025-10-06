@@ -358,9 +358,8 @@ class FirebaseMessagingService {
       print('📨 Firebase: CollapseKey: ${message.collapseKey}');
 
       // Show local notification when app is in foreground
+      // Don't auto-navigate - user must tap the notification to open detail page
       _showLocalNotification(message);
-
-      _handleMessage(message);
     });
 
     // Handle message when app is opened from notification (background state)
@@ -376,6 +375,7 @@ class FirebaseMessagingService {
     });
 
     // Check if app was opened from a notification (when app was terminated)
+    // This means user already tapped the notification, so we should navigate
     RemoteMessage? initialMessage = await messaging.getInitialMessage();
     if (initialMessage != null) {
       print('📨 Firebase: App opened from notification (terminated state)');
@@ -384,10 +384,8 @@ class FirebaseMessagingService {
       print('📨 Firebase: Body: ${initialMessage.notification?.body}');
       print('📨 Firebase: Data: ${initialMessage.data}');
 
-      // Delay navigation to allow app to fully initialize
-      Future.delayed(const Duration(milliseconds: 500), () {
-        _handleMessage(initialMessage);
-      });
+      // User tapped notification to open app, so navigate to detail page
+      _handleMessage(initialMessage);
     }
 
     print('✅ Firebase: Message handlers setup complete');
