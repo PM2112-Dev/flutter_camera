@@ -31,6 +31,7 @@ class FirebaseMessagingService {
   String? _fcmToken;
   bool _isInitialized = false;
   User? _currentUser;
+  Map<String, String>? _pendingNavigation;
 
   FirebaseMessagingService(this._userTokenApi, this._authPreference, this._notificationPreference);
 
@@ -160,6 +161,9 @@ class FirebaseMessagingService {
       print('🔄 Firebase: User available after initialization, sending token to server...');
       await _sendTokenToServer();
     }
+
+    // Check for pending navigation after app is ready
+    checkPendingNavigation();
   }
 
   /// Gửi FCM token lên server (luôn gửi, không so sánh với token cũ)
@@ -254,6 +258,9 @@ class FirebaseMessagingService {
         if (androidPlugin != null) {
           await androidPlugin.createNotificationChannel(channel);
           print('✅ Android notification channel created');
+          print('📱 Channel ID: high_importance_channel');
+          print('📱 Channel importance: max');
+          print('📱 Channel sound: system default');
         }
       }
 
@@ -280,11 +287,12 @@ class FirebaseMessagingService {
           print('🧭 Navigating to notification detail');
           print('🧭 Type: $type, ID: $id, DataTime: $dataTime');
 
-          // Navigate to notification detail page
-          main_app.navigatorKey.currentState?.pushNamed(
-            AppRoutes.notificationDetail,
-            arguments: {'id': id, 'dataTime': dataTime},
-          );
+          // Store navigation data for later use
+          _pendingNavigation = {'type': type, 'id': id, 'dataTime': dataTime};
+          print('📝 Stored pending navigation data');
+
+          // Try to navigate immediately, if fails, it will be handled when app is ready
+          _tryNavigateToDetail();
         } else {
           print('⚠️ Invalid payload format: ${response.payload}');
         }
@@ -317,6 +325,10 @@ class FirebaseMessagingService {
     print('🔔 Title: ${notification.title}');
     print('🔔 Body: ${notification.body}');
     print('🔔 Data: ${message.data}');
+    print('🔔 Sound enabled: ${_notificationPreference.soundEnabled}');
+    print('🔔 Vibration enabled: ${_notificationPreference.vibrationEnabled}');
+    print('🔔 Platform: ${Platform.isAndroid ? "Android" : "iOS"}');
+    print('🔔 Force sound: true');
 
     // Extract notification data for navigation
     final String? id = message.data['id'];
@@ -330,7 +342,7 @@ class FirebaseMessagingService {
       print('🔔 Payload created: $payload');
     }
 
-    // Android notification details - respect user settings
+    // Android notification details - force sound for foreground notifications
     final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       'high_importance_channel',
       'High Importance Notifications',
@@ -338,19 +350,28 @@ class FirebaseMessagingService {
       importance: Importance.max,
       priority: Priority.high,
       showWhen: true,
-      playSound: _notificationPreference.soundEnabled,
+      playSound: true, // ✅ Force sound ON for foreground notifications
       enableVibration: _notificationPreference.vibrationEnabled,
       enableLights: true,
       icon: '@mipmap/ic_launcher',
       ticker: 'New notification',
+      // Đảm bảo có âm thanh mặc định (sử dụng system default)
+      sound: null, // Sử dụng âm thanh mặc định của hệ thống
+      // Thêm settings để đảm bảo hiển thị
+      visibility: NotificationVisibility.public,
+      category: AndroidNotificationCategory.alarm,
+      autoCancel: true,
+      ongoing: false,
     );
 
-    // iOS notification details - respect user settings
+    // iOS notification details - force sound for foreground notifications
     final DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
       presentAlert: true,
       presentBadge: true,
-      presentSound: _notificationPreference.soundEnabled,
-      sound: _notificationPreference.soundEnabled ? 'default' : null,
+      presentSound: true, // ✅ Force sound ON for foreground notifications
+      sound: 'default', // ✅ Always use default sound
+      // Đảm bảo có âm thanh mặc định
+      interruptionLevel: InterruptionLevel.active,
     );
 
     final NotificationDetails details = NotificationDetails(
@@ -367,9 +388,11 @@ class FirebaseMessagingService {
         payload: payload,
       );
 
-      print(
-        '✅ Local notification shown (sound: ${_notificationPreference.soundEnabled}, vibration: ${_notificationPreference.vibrationEnabled})',
-      );
+      print('✅ Local notification shown successfully');
+      print('🔊 Force sound: true (regardless of user setting)');
+      print('📱 Notification channel: high_importance_channel');
+      print('🔔 User sound setting: ${_notificationPreference.soundEnabled}');
+      print('📳 User vibration setting: ${_notificationPreference.vibrationEnabled}');
     } catch (e) {
       print('⚠️ Failed to show notification: $e');
     }
@@ -428,16 +451,12 @@ class FirebaseMessagingService {
     final String? type = message.data['type'];
 
     if (id != null && dataTime != null) {
-      print('🧭 Navigating to notification detail from background/terminated state');
+      print('🧭 Storing navigation data from background/terminated state');
       print('🧭 Type: $type, ID: $id, DataTime: $dataTime');
 
-      // Use a slight delay to ensure navigation is ready
-      Future.delayed(const Duration(milliseconds: 500), () {
-        main_app.navigatorKey.currentState?.pushNamed(
-          AppRoutes.notificationDetail,
-          arguments: {'id': id, 'dataTime': dataTime},
-        );
-      });
+      // Store navigation data for later use when app is ready
+      _pendingNavigation = {'type': type ?? '', 'id': id, 'dataTime': dataTime};
+      print('📝 Stored pending navigation data from background');
     }
 
     // Additional handling based on type
@@ -556,11 +575,87 @@ class FirebaseMessagingService {
         print('❌ Firebase: Failed to get FCM token: $e');
       }
     }
+
+    // Check for pending navigation after user login
+    checkPendingNavigation();
   }
 
   /// Xóa thông tin user hiện tại (khi logout)
   void clearCurrentUser() {
     print('🧹 Firebase: Clearing current user');
     _currentUser = null;
+  }
+
+  /// Thử navigate đến notification detail
+  void _tryNavigateToDetail() {
+    if (_pendingNavigation == null) return;
+
+    try {
+      final id = _pendingNavigation!['id'];
+      final dataTime = _pendingNavigation!['dataTime'];
+
+      if (id != null && dataTime != null) {
+        print('🧭 Attempting navigation to notification detail');
+        main_app.navigatorKey.currentState?.pushNamed(
+          AppRoutes.notificationDetail,
+          arguments: {'id': id, 'dataTime': dataTime},
+        );
+        print('✅ Navigation successful');
+        _pendingNavigation = null; // Clear after successful navigation
+      }
+    } catch (e) {
+      print('❌ Navigation failed: $e');
+      // Keep pending navigation for retry later
+    }
+  }
+
+  /// Check và thực hiện pending navigation (gọi khi app ready)
+  void checkPendingNavigation() {
+    if (_pendingNavigation != null) {
+      print('🔄 Checking pending navigation...');
+      _tryNavigateToDetail();
+    }
+  }
+
+  /// Test notification với settings đơn giản
+  Future<void> testSimpleNotification() async {
+    print('🧪 Testing simple notification...');
+
+    try {
+      const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+        'high_importance_channel',
+        'High Importance Notifications',
+        channelDescription: 'This channel is used for important notifications',
+        importance: Importance.max,
+        priority: Priority.high,
+        playSound: true,
+        enableVibration: true,
+        showWhen: true,
+        autoCancel: true,
+      );
+
+      const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      );
+
+      const NotificationDetails details = NotificationDetails(
+        android: androidDetails,
+        iOS: iosDetails,
+      );
+
+      await _localNotifications.show(
+        999,
+        'Test Notification',
+        'This is a test notification to check sound',
+        details,
+      );
+
+      print('🧪 Test notification sent successfully');
+      print('🔊 Should have system default sound');
+    } catch (e) {
+      print('❌ Error sending test notification: $e');
+    }
   }
 }
