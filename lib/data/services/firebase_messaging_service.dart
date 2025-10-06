@@ -375,7 +375,7 @@ class FirebaseMessagingService {
     });
 
     // Check if app was opened from a notification (when app was terminated)
-    // Note: We don't auto-navigate here - user needs to tap the notification
+    // This means user already tapped the notification, so we should navigate
     RemoteMessage? initialMessage = await messaging.getInitialMessage();
     if (initialMessage != null) {
       print('📨 Firebase: App opened from notification (terminated state)');
@@ -383,7 +383,9 @@ class FirebaseMessagingService {
       print('📨 Firebase: Title: ${initialMessage.notification?.title}');
       print('📨 Firebase: Body: ${initialMessage.notification?.body}');
       print('📨 Firebase: Data: ${initialMessage.data}');
-      // Don't auto-navigate - wait for user to tap notification from notification shade
+
+      // User tapped notification to open app, so navigate to detail page
+      _handleMessage(initialMessage);
     }
 
     print('✅ Firebase: Message handlers setup complete');
