@@ -16,6 +16,7 @@ class AuthLocalPreference {
   static const String _portKey = 'port';
   static const String _streamBaseUrlKey = 'stream_base_url';
   static const String _streamPortKey = 'stream_port';
+  static const String _fcmTokenKey = 'fcm_token';
 
   Future<void> saveTokens(AuthTokensModel tokens) async {
     await _prefs.setString(_accessTokenKey, tokens.accessToken);
@@ -54,6 +55,21 @@ class AuthLocalPreference {
   bool isLoggedIn() {
     final tokens = getTokens();
     return tokens != null && tokens.accessToken.isNotEmpty;
+  }
+
+  // FCM Token methods
+  Future<void> saveFcmToken(String token) async {
+    await _prefs.setString(_fcmTokenKey, token);
+    print('AuthLocalPreference: FCM token saved');
+  }
+
+  String? getFcmToken() {
+    return _prefs.getString(_fcmTokenKey);
+  }
+
+  Future<void> clearFcmToken() async {
+    await _prefs.remove(_fcmTokenKey);
+    print('AuthLocalPreference: FCM token cleared');
   }
 
   // Server configuration methods

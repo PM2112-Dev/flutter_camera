@@ -10,7 +10,11 @@ import 'package:flutter_camera/presentation/bloc/auth/auth_state.dart';
 import 'package:flutter_camera/presentation/routes/app_routes.dart';
 import 'package:flutter_camera/presentation/ui/home/pages/home_page.dart';
 import 'package:flutter_camera/presentation/ui/login/page/login_page.dart';
+import 'package:flutter_camera/presentation/ui/notification/pages/notification_detail_page.dart';
 import 'package:flutter_camera/presentation/ui/shared/design_system.dart';
+
+// Global navigator key for navigation from anywhere
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,11 +40,25 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       title: 'MTKVision',
       theme: AppTheme.lightTheme,
       home: const AppInitializer(),
       routes: routes,
+      onGenerateRoute: (settings) {
+        // Handle routes that require parameters
+        if (settings.name == AppRoutes.notificationDetail) {
+          final args = settings.arguments as Map<String, String>;
+          return MaterialPageRoute(
+            builder: (_) => NotificationDetailPage(
+              notificationId: args['id'] ?? '',
+              dataTime: args['dataTime'] ?? '',
+            ),
+          );
+        }
+        return null;
+      },
     );
   }
 }

@@ -4,10 +4,38 @@ import android.os.Bundle
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.security.cert.X509Certificate
+import javax.net.ssl.*
 
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "com.example.flutter_camera/exoplayer"
     private lateinit var exoPlayerManager: ExoPlayerManager
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // Disable SSL certificate validation for HTTPS connections (DEVELOPMENT ONLY!)
+        disableSSLCertificateChecking()
+    }
+
+    private fun disableSSLCertificateChecking() {
+        try {
+            val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
+                override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+                override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+                override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+            })
+            
+            val sslContext = SSLContext.getInstance("TLS")
+            sslContext.init(null, trustAllCerts, java.security.SecureRandom())
+            
+            HttpsURLConnection.setDefaultSSLSocketFactory(sslContext.socketFactory)
+            HttpsURLConnection.setDefaultHostnameVerifier { _, _ -> true }
+            
+            android.util.Log.i("MainActivity", "SSL certificate validation disabled")
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

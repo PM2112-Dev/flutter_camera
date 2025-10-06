@@ -88,7 +88,7 @@ void initState() {
 
 ### **2. WebView Streaming:**
 
-- **Go2RTC Server**: `http://thermal.mtktech.com.vn:1984`
+- **Go2RTC Server**: `http://thermal.infosysvietnam.com.vn:1984`
 - **Multiple Protocols**: WebRTC, MSE, HLS, MJPEG
 - **Auto Fallback**: Tự động chuyển đổi protocol
 - **Thermal Camera Support**: Scale transform cho thermal camera
@@ -131,7 +131,7 @@ void initState() {
 
 ```dart
 String _buildGo2RTCUrl() {
-  final baseUrl = 'http://thermal.mtktech.com.vn:1984';
+  final baseUrl = 'http://thermal.infosysvietnam.com.vn:1984';
   final modes = 'webrtc,mse,hls,mjpeg';
   final background = 'false';
   final width = '320';

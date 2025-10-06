@@ -51,7 +51,7 @@ class _CombinedConfigWidgetState extends State<CombinedConfigWidget> {
       _streamBaseUrlController.text = widget.initialStreamConfig!.baseUrl;
       _streamPortController.text = widget.initialStreamConfig!.port.toString();
     } else {
-      _streamBaseUrlController.text = 'https://thermal.mtktech.com.vn';
+      _streamBaseUrlController.text = 'https://thermal.infosysvietnam.com.vn';
       _streamPortController.text = '1984';
     }
   }
@@ -113,7 +113,7 @@ class _CombinedConfigWidgetState extends State<CombinedConfigWidget> {
           _buildTextField(
             controller: _streamBaseUrlController,
             label: 'Base URL',
-            hint: 'http://thermal.infosysvietnam.com.vn',
+            hint: 'https://thermal.infosysvietnam.com.vn',
             prefixIcon: Icons.language,
             isUrl: true,
           ),

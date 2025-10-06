@@ -32,7 +32,7 @@
 
 ```dart
 String _buildGo2RTCUrl() {
-  final baseUrl = 'http://thermal.mtktech.com.vn:1984';
+  final baseUrl = 'http://thermal.infosysvietnam.com.vn:1984';
   final modes = 'webrtc,mse,hls,mjpeg';
   final background = 'true'; // Enable background play
   final width = '320';

@@ -142,18 +142,23 @@ class _DevicePageState extends State<DevicePage> {
 
         debugPrint('DevicePage: Building with ${camerasToShow.length} selected cameras');
 
-        // Update selected cameras in provider
+        // Update selected cameras in provider (safe - doesn't trigger notifyListeners)
         streamDataProvider.updateSelectedCameras(camerasToShow);
 
-        // Request stream data for cameras that don't have it yet
-        for (final camera in camerasToShow) {
-          final streamData = streamDataProvider.getStreamData(camera.uniqueId);
-          if (streamData == null ||
-              (!streamData.isLoading && streamData.streamId == null && streamData.error == null)) {
-            debugPrint('DevicePage: Requesting stream data for new camera: ${camera.name}');
-            streamDataProvider.requestStreamData(camera);
+        // Request stream data after build completes to avoid setState during build
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          // Request stream data for cameras that don't have it yet
+          for (final camera in camerasToShow) {
+            final streamData = streamDataProvider.getStreamData(camera.uniqueId);
+            if (streamData == null ||
+                (!streamData.isLoading &&
+                    streamData.streamId == null &&
+                    streamData.error == null)) {
+              debugPrint('DevicePage: Requesting stream data for new camera: ${camera.name}');
+              streamDataProvider.requestStreamData(camera);
+            }
           }
-        }
+        });
 
         if (camerasToShow.isEmpty) {
           return AppWidgets.buildEmptyState(

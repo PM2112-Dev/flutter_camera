@@ -65,36 +65,40 @@ class UserTokenApiService {
     }
   }
 
-  Future<bool> deleteUserToken({required String token, required String authToken}) async {
-    try {
-      print('🗑️ UserToken API: Deleting token from server...');
-      print('🔑 FCM Token: ${token.isNotEmpty ? "Present (${token.length} chars)" : "Missing"}');
+  // DELETE API không tồn tại trên server
+  // Server sẽ tự động clean up tokens không còn hoạt động
+  // Giữ lại function này để tương lai nếu server implement API
 
-      final headers = <String, String>{
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $authToken',
-      };
-      final response = await _dio.delete(
-        '$_baseUrl/api/Users/userToken',
-        data: {'token': token},
-        options: Options(headers: headers),
-      );
-
-      print('✅ UserToken API: Delete response received');
-      print('📊 Status: ${response.statusCode}');
-
-      return response.statusCode == 200;
-    } catch (e) {
-      print('❌ UserToken API Delete Error: $e');
-      if (e is DioException) {
-        print('🌐 Dio Error Details:');
-        print('   - Type: ${e.type}');
-        print('   - Message: ${e.message}');
-        print('   - Response: ${e.response?.data}');
-        print('   - Status Code: ${e.response?.statusCode}');
-      }
-      return false;
-    }
-  }
+  // Future<bool> deleteUserToken({required String token, required String authToken}) async {
+  //   try {
+  //     print('🗑️ UserToken API: Deleting token from server...');
+  //     print('🔑 FCM Token: ${token.isNotEmpty ? "Present (${token.length} chars)" : "Missing"}');
+  //
+  //     final headers = <String, String>{
+  //       'Accept': 'application/json',
+  //       'Content-Type': 'application/json',
+  //       'Authorization': 'Bearer $authToken',
+  //     };
+  //     final response = await _dio.delete(
+  //       '$_baseUrl/api/Users/userToken',
+  //       data: {'token': token},
+  //       options: Options(headers: headers),
+  //     );
+  //
+  //     print('✅ UserToken API: Delete response received');
+  //     print('📊 Status: ${response.statusCode}');
+  //
+  //     return response.statusCode == 200;
+  //   } catch (e) {
+  //     print('❌ UserToken API Delete Error: $e');
+  //     if (e is DioException) {
+  //       print('🌐 Dio Error Details:');
+  //       print('   - Type: ${e.type}');
+  //       print('   - Message: ${e.message}');
+  //       print('   - Response: ${e.response?.data}');
+  //       print('   - Status Code: ${e.response?.statusCode}');
+  //     }
+  //     return false;
+  //   }
+  // }
 }

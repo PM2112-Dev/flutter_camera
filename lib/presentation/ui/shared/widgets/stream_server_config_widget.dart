@@ -6,11 +6,7 @@ class StreamServerConfigWidget extends StatefulWidget {
   final Function(StreamServerConfig) onSave;
   final StreamServerConfig? initialConfig;
 
-  const StreamServerConfigWidget({
-    super.key,
-    required this.onSave,
-    this.initialConfig,
-  });
+  const StreamServerConfigWidget({super.key, required this.onSave, this.initialConfig});
 
   @override
   State<StreamServerConfigWidget> createState() => _StreamServerConfigWidgetState();
@@ -29,7 +25,7 @@ class _StreamServerConfigWidgetState extends State<StreamServerConfigWidget> {
       _portController.text = widget.initialConfig!.port.toString();
     } else {
       // Default values
-      _baseUrlController.text = 'thermal.mtktech.com.vn';
+      _baseUrlController.text = 'thermal.infosysvietnam.com.vn';
       _portController.text = '1984';
     }
   }
@@ -83,9 +79,7 @@ class _StreamServerConfigWidgetState extends State<StreamServerConfigWidget> {
             const SizedBox(height: 8),
             Text(
               'Configure the stream server for video playback',
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.textSecondary,
-              ),
+              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
             ),
             const SizedBox(height: 24),
 
@@ -94,7 +88,7 @@ class _StreamServerConfigWidgetState extends State<StreamServerConfigWidget> {
               controller: _baseUrlController,
               decoration: InputDecoration(
                 labelText: 'Base URL',
-                hintText: 'thermal.mtktech.com.vn',
+                hintText: 'thermal.infosysvietnam.com.vn',
                 prefixIcon: const Icon(Icons.language),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppBorderRadius.medium),
@@ -188,9 +182,7 @@ class _StreamServerConfigWidgetState extends State<StreamServerConfigWidget> {
                 ),
                 child: Text(
                   'Save Stream Server Configuration',
-                  style: AppTextStyles.bodyLarge.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold),
                 ),
               ),
             ),

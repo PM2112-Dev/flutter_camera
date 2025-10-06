@@ -190,6 +190,13 @@ extension GetItInjectableX on _i174.GetIt {
       () =>
           _i761.NotificationsRepositoryImpl(gh<_i678.NotificationApiService>()),
     );
+    gh.singleton<_i935.FirebaseMessagingService>(
+      () => _i935.FirebaseMessagingService(
+        gh<_i1045.UserTokenApiService>(),
+        gh<_i183.AuthLocalPreference>(),
+        gh<_i1024.NotificationPreference>(),
+      ),
+    );
     gh.factory<_i527.GetVisionNotificationsUseCase>(
       () => _i527.GetVisionNotificationsUseCase(
         gh<_i983.VisionNotificationsRepository>(),
@@ -198,12 +205,6 @@ extension GetItInjectableX on _i174.GetIt {
     gh.factory<_i170.AreaRepository>(
       () => _i964.AreaRepositoryImpl(
         gh<_i990.AreaApiService>(),
-        gh<_i183.AuthLocalPreference>(),
-      ),
-    );
-    gh.singleton<_i935.FirebaseMessagingService>(
-      () => _i935.FirebaseMessagingService(
-        gh<_i1045.UserTokenApiService>(),
         gh<_i183.AuthLocalPreference>(),
       ),
     );

@@ -136,58 +136,29 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _performLogout(BuildContext context, AuthLocalPreference authPreference) async {
+    // Clear camera selection data before logout to prevent conflicts
     try {
-      // Call logout API
-      final authApiService = getIt<AuthApiService>();
-      await authApiService.logout();
-
-      // Clear local storage
-      await authPreference.clearTokens();
-
-      // Clear camera selection data to prevent conflicts
-      try {
-        final cameraSelectionProvider = getIt<CameraSelectionProvider>();
-        await cameraSelectionProvider.clearAll();
-      } catch (e) {
-        print('Error clearing camera selection: $e');
-      }
-
-      // Clear camera stream data to prevent conflicts
-      try {
-        final streamDataProvider = getIt<CameraStreamDataProvider>();
-        streamDataProvider.clearAllStreamData();
-      } catch (e) {
-        print('Error clearing stream data: $e');
-      }
-
-      // Close dialog
-      Navigator.of(context).pop();
-      // Dispatch logout event to AuthBloc (let AppInitializer handle navigation)
-      context.read<AuthBloc>().add(const LogoutRequested());
+      await _cameraSelectionProvider.clearAll();
+      print('✅ Camera selection cleared');
     } catch (e) {
-      // Close dialog anyway
-      Navigator.of(context).pop();
-      // Clear local storage even if API call fails
-      await authPreference.clearTokens();
-
-      // Clear camera data even if API call fails
-      try {
-        final cameraSelectionProvider = getIt<CameraSelectionProvider>();
-        await cameraSelectionProvider.clearAll();
-      } catch (e) {
-        print('Error clearing camera selection: $e');
-      }
-
-      try {
-        final streamDataProvider = getIt<CameraStreamDataProvider>();
-        streamDataProvider.clearAllStreamData();
-      } catch (e) {
-        print('Error clearing stream data: $e');
-      }
-
-      // Dispatch logout event to AuthBloc (let AppInitializer handle navigation)
-      context.read<AuthBloc>().add(const LogoutRequested());
+      print('⚠️ Error clearing camera selection: $e');
     }
+
+    // Clear camera stream data before logout to prevent conflicts
+    try {
+      // Try to get streamDataProvider from context if available
+      final streamDataProvider = context.read<CameraStreamDataProvider>();
+      streamDataProvider.clearAllStreamData();
+      print('✅ Camera stream data cleared');
+    } catch (e) {
+      print('⚠️ Error clearing stream data (provider not available in this context): $e');
+    }
+
+    // Close dialog
+    Navigator.of(context).pop();
+
+    // Dispatch logout event to AuthBloc (it will handle API call and token clearing)
+    context.read<AuthBloc>().add(const LogoutRequested());
   }
 
   void _showCameraSelectionDialog() async {
