@@ -1,15 +1,14 @@
 import 'dart:io';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_camera/data/network/api/user_token_api_service.dart';
 import 'package:flutter_camera/data/local/preference/auth_local_preference.dart';
 import 'package:flutter_camera/data/local/preference/notification_preference.dart';
 import 'package:flutter_camera/domain/model/user.dart';
-import 'package:flutter_camera/presentation/ui/notification/pages/notification_detail_page.dart';
+import 'package:flutter_camera/presentation/routes/app_routes.dart';
+import 'package:flutter_camera/main.dart' as main_app;
 import 'package:injectable/injectable.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:flutter_camera/main.dart' as main_app;
 
 // Background message handler - phải là top-level function
 @pragma('vm:entry-point')
@@ -84,12 +83,18 @@ class FirebaseMessagingService {
         await _setupMessageHandlers();
         _isInitialized = true;
         print('✅ Firebase: Messaging initialization complete');
+
+        // Nếu đã có user, gửi token ngay lập tức
+        await _sendTokenIfUserAvailable();
       } else if (settings.authorizationStatus == AuthorizationStatus.provisional) {
         print('⚠️ Firebase: Permission is provisional');
         await _setupToken();
         await _setupMessageHandlers();
         _isInitialized = true;
         print('✅ Firebase: Messaging initialization complete (provisional)');
+
+        // Nếu đã có user, gửi token ngay lập tức
+        await _sendTokenIfUserAvailable();
       } else {
         print('❌ Firebase: Permission denied or not determined');
         print('❌ Firebase: Status: ${settings.authorizationStatus}');
@@ -114,8 +119,9 @@ class FirebaseMessagingService {
       print('📋 Firebase: Token length: ${_fcmToken?.length ?? 0} characters');
 
       if (_fcmToken != null) {
-        print('📤 Firebase: Registering token with server...');
-        await _sendTokenToServer();
+        print('🔑 Firebase: FCM Token ready - will be sent to server when user logs in');
+        // Không tự động gửi token lên server, chỉ lưu token
+        // Token sẽ được gửi khi user login thông qua registerTokenForNewUser()
       } else {
         print('⚠️ Firebase: FCM Token is null!');
         print('⚠️ Firebase: This might be because APNS token is not set yet');
@@ -127,7 +133,16 @@ class FirebaseMessagingService {
         print('🔄 Firebase: Token refreshed: $token');
         print('📋 Firebase: New token length: ${token.length} characters');
         _fcmToken = token;
-        await _sendTokenToServer();
+
+        // Chỉ gửi token refresh nếu user đã login
+        if (_currentUser != null) {
+          print('🔄 Firebase: Sending refreshed token to server...');
+          await _sendTokenToServer();
+        } else {
+          print(
+            '🔄 Firebase: Token refreshed but user not logged in - token will be sent when user logs in',
+          );
+        }
       });
     } catch (e) {
       print('❌ Firebase: Token setup error: $e');
@@ -139,8 +154,19 @@ class FirebaseMessagingService {
     }
   }
 
+  /// Gửi token nếu đã có user (được gọi sau khi Firebase khởi tạo xong)
+  Future<void> _sendTokenIfUserAvailable() async {
+    if (_currentUser != null && _fcmToken != null) {
+      print('🔄 Firebase: User available after initialization, sending token to server...');
+      await _sendTokenToServer();
+    }
+  }
+
   Future<void> _sendTokenToServer() async {
-    if (_fcmToken == null) return;
+    if (_fcmToken == null) {
+      print('⚠️ Firebase: No FCM token available, skipping server registration');
+      return;
+    }
 
     try {
       final tokens = _authPreference.getTokens();
@@ -154,6 +180,10 @@ class FirebaseMessagingService {
         print('⚠️ Firebase: No current user available, skipping server registration');
         return;
       }
+
+      print(
+        '📤 Firebase: Attempting to send FCM token to server for user ${_currentUser!.username}',
+      );
 
       // Lấy FCM token cũ đã lưu
       final savedToken = _authPreference.getFcmToken();
@@ -224,13 +254,13 @@ class FirebaseMessagingService {
         onDidReceiveNotificationResponse: _onNotificationTapped,
       );
 
-      // Create Android notification channel with sound
+      // Create Android notification channel
       if (Platform.isAndroid) {
         const AndroidNotificationChannel channel = AndroidNotificationChannel(
-          'high_importance_channel', // id
-          'High Importance Notifications', // name
+          'high_importance_channel',
+          'High Importance Notifications',
           description: 'This channel is used for important notifications',
-          importance: Importance.max, // Use max importance for sound
+          importance: Importance.max,
           playSound: true,
           enableVibration: true,
           showBadge: true,
@@ -241,24 +271,44 @@ class FirebaseMessagingService {
 
         if (androidPlugin != null) {
           await androidPlugin.createNotificationChannel(channel);
-          print('✅ Android notification channel created with sound enabled');
+          print('✅ Android notification channel created');
         }
       }
 
       print('✅ Local notifications initialized');
     } catch (e) {
       print('⚠️ Local notifications initialization failed: $e');
-      print('⚠️ Continuing without local notifications...');
     }
   }
 
-  // Handle notification tap
   void _onNotificationTapped(NotificationResponse response) {
     print('🔔 Notification tapped');
     print('🔔 Payload: ${response.payload}');
 
-    if (response.payload != null) {
-      _navigateToNotificationDetail(response.payload!);
+    // Handle navigation based on payload
+    if (response.payload != null && response.payload!.isNotEmpty) {
+      try {
+        // Parse payload: "type|id|dataTime"
+        final parts = response.payload!.split('|');
+        if (parts.length >= 3) {
+          final type = parts[0];
+          final id = parts[1];
+          final dataTime = parts[2];
+
+          print('🧭 Navigating to notification detail');
+          print('🧭 Type: $type, ID: $id, DataTime: $dataTime');
+
+          // Navigate to notification detail page
+          main_app.navigatorKey.currentState?.pushNamed(
+            AppRoutes.notificationDetail,
+            arguments: {'id': id, 'dataTime': dataTime},
+          );
+        } else {
+          print('⚠️ Invalid payload format: ${response.payload}');
+        }
+      } catch (e) {
+        print('❌ Error parsing notification payload: $e');
+      }
     }
   }
 
@@ -291,7 +341,7 @@ class FirebaseMessagingService {
     final String? dataTime = message.data['dataTime'];
     final String? type = message.data['type'];
 
-    // Create payload for navigation (JSON string format)
+    // Create payload for navigation
     String? payload;
     if (id != null && dataTime != null) {
       payload = '$type|$id|$dataTime';
@@ -300,25 +350,25 @@ class FirebaseMessagingService {
 
     // Android notification details - respect user settings
     final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'high_importance_channel', // channel ID (must match the channel created)
-      'High Importance Notifications', // channel name
+      'high_importance_channel',
+      'High Importance Notifications',
       channelDescription: 'This channel is used for important notifications',
-      importance: Importance.max, // Max importance ensures sound plays
+      importance: Importance.max,
       priority: Priority.high,
       showWhen: true,
-      playSound: _notificationPreference.soundEnabled, // ✅ Respect sound setting
-      enableVibration: _notificationPreference.vibrationEnabled, // ✅ Respect vibration setting
-      enableLights: true, // Enable LED notification light
-      icon: '@mipmap/ic_launcher', // Notification icon
-      ticker: 'New notification', // Accessibility ticker
+      playSound: _notificationPreference.soundEnabled,
+      enableVibration: _notificationPreference.vibrationEnabled,
+      enableLights: true,
+      icon: '@mipmap/ic_launcher',
+      ticker: 'New notification',
     );
 
     // iOS notification details - respect user settings
     final DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
       presentAlert: true,
       presentBadge: true,
-      presentSound: _notificationPreference.soundEnabled, // ✅ Respect sound setting
-      sound: _notificationPreference.soundEnabled ? 'default' : null, // ✅ Only set sound if enabled
+      presentSound: _notificationPreference.soundEnabled,
+      sound: _notificationPreference.soundEnabled ? 'default' : null,
     );
 
     final NotificationDetails details = NotificationDetails(
@@ -328,11 +378,11 @@ class FirebaseMessagingService {
 
     try {
       await _localNotifications.show(
-        message.hashCode, // notification ID
+        message.hashCode,
         notification.title ?? 'Thông báo',
         notification.body ?? '',
         details,
-        payload: payload, // Add payload for tap handling
+        payload: payload,
       );
 
       print(
@@ -357,99 +407,70 @@ class FirebaseMessagingService {
       print('📨 Firebase: Category: ${message.category}');
       print('📨 Firebase: CollapseKey: ${message.collapseKey}');
 
-      // Show local notification when app is in foreground
-      // Don't auto-navigate - user must tap the notification to open detail page
+      // ✅ Show local notification when app is in foreground
+      // Don't auto-navigate - wait for user to tap the notification
       _showLocalNotification(message);
     });
 
-    // Handle message when app is opened from notification (background state)
+    // Handle message when app is opened from notification
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      print('📨 Firebase: Message opened app (from background)');
+      print('📨 Firebase: Message opened app');
       print('📨 Firebase: messageId: ${message.messageId}');
       print('📨 Firebase: Title: ${message.notification?.title}');
       print('📨 Firebase: Body: ${message.notification?.body}');
       print('📨 Firebase: Data: ${message.data}');
 
-      // Navigate to detail page
       _handleMessage(message);
     });
 
     // Check if app was opened from a notification (when app was terminated)
-    // This means user already tapped the notification, so we should navigate
+    // Note: We don't auto-navigate here - user needs to tap the notification
+    // from the notification shade to trigger navigation
     RemoteMessage? initialMessage = await messaging.getInitialMessage();
     if (initialMessage != null) {
       print('📨 Firebase: App opened from notification (terminated state)');
       print('📨 Firebase: messageId: ${initialMessage.messageId}');
-      print('📨 Firebase: Title: ${initialMessage.notification?.title}');
-      print('📨 Firebase: Body: ${initialMessage.notification?.body}');
-      print('📨 Firebase: Data: ${initialMessage.data}');
-
-      // User tapped notification to open app, so navigate to detail page
-      _handleMessage(initialMessage);
+      // Don't call _handleMessage() here - let user tap notification instead
     }
 
     print('✅ Firebase: Message handlers setup complete');
   }
 
   void _handleMessage(RemoteMessage message) {
-    print('📨 Handling message: ${message.data}');
+    // Process notification data and navigate if needed
+    print('📨 Handling message with data: ${message.data}');
 
-    // Extract data from message
+    // Navigate to notification detail if we have the required data
     final String? id = message.data['id'];
     final String? dataTime = message.data['dataTime'];
     final String? type = message.data['type'];
 
-    print('📨 Extracted - Type: $type, ID: $id, DataTime: $dataTime');
-
-    // Navigate to detail page based on notification type
     if (id != null && dataTime != null) {
-      if (type == 'thermal_notification') {
-        print('🌡️ Opening thermal notification detail');
-        _navigateToThermalNotification(id, dataTime);
-      } else {
-        print('📨 Unknown notification type: $type');
+      print('🧭 Navigating to notification detail from background/terminated state');
+      print('🧭 Type: $type, ID: $id, DataTime: $dataTime');
+
+      // Use a slight delay to ensure navigation is ready
+      Future.delayed(const Duration(milliseconds: 500), () {
+        main_app.navigatorKey.currentState?.pushNamed(
+          AppRoutes.notificationDetail,
+          arguments: {'id': id, 'dataTime': dataTime},
+        );
+      });
+    }
+
+    // Additional handling based on type
+    if (message.data.containsKey('type')) {
+      switch (message.data['type']) {
+        case 'vision_alert':
+          print('🤖 Handling vision alert notification');
+          break;
+        case 'temperature_alert':
+          print('🌡️ Handling temperature alert notification');
+          break;
+        default:
+          print('📨 Handling generic notification');
       }
-    } else {
-      print('⚠️ Missing id or dataTime in notification data');
     }
-  }
-
-  void _navigateToNotificationDetail(String payload) {
-    print('🧭 Navigating with payload: $payload');
-
-    // Parse payload format: "type|id|dataTime"
-    final parts = payload.split('|');
-    if (parts.length == 3) {
-      final type = parts[0];
-      final id = parts[1];
-      final dataTime = parts[2];
-
-      print('🧭 Parsed - Type: $type, ID: $id, DataTime: $dataTime');
-
-      if (type == 'thermal_notification') {
-        _navigateToThermalNotification(id, dataTime);
-      }
-    } else {
-      print('⚠️ Invalid payload format: $payload');
-    }
-  }
-
-  void _navigateToThermalNotification(String id, String dataTime) {
-    final context = main_app.navigatorKey.currentContext;
-    if (context == null) {
-      print('⚠️ Navigator context is null, cannot navigate');
-      return;
-    }
-
-    print('🧭 Navigating to NotificationDetailPage');
-    print('🧭 ID: $id');
-    print('🧭 DataTime: $dataTime');
-
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => NotificationDetailPage(notificationId: id, dataTime: dataTime),
-      ),
-    );
   }
 
   Future<void> subscribeToTopic(String topic) async {
@@ -470,15 +491,13 @@ class FirebaseMessagingService {
     }
   }
 
-  /// Cập nhật thông tin user hiện tại và đăng ký lại FCM token
+  /// Cập nhật thông tin user hiện tại
   Future<void> updateCurrentUser(User user) async {
     print('👤 Firebase: Updating current user to ${user.username} (ID: ${user.id})');
     _currentUser = user;
 
-    // Re-register FCM token with new user
-    if (_fcmToken != null) {
-      await _sendTokenToServer();
-    }
+    // Không tự động gửi token ở đây
+    // Token sẽ được gửi thông qua registerTokenForNewUser() khi cần thiết
   }
 
   /// Hủy đăng ký FCM token khi logout
@@ -512,7 +531,50 @@ class FirebaseMessagingService {
   /// Đăng ký lại FCM token cho user mới (sau khi login)
   Future<void> registerTokenForNewUser(User user) async {
     print('🔄 Firebase: Registering token for new user ${user.username}');
-    await updateCurrentUser(user);
+    _currentUser = user;
+
+    // Force re-registration bằng cách clear saved token để đảm bảo gửi lên server
+    await _authPreference.clearFcmToken();
+    print('🧹 Firebase: Cleared saved token to force re-registration');
+
+    // Gửi token lên server
+    if (_fcmToken != null) {
+      print('📤 Firebase: Sending FCM token to server for user ${user.username}');
+      await _sendTokenToServer();
+    } else {
+      print('⚠️ Firebase: No FCM token available to send to server');
+
+      // Nếu Firebase chưa khởi tạo, đợi cho đến khi khởi tạo xong
+      if (!_isInitialized) {
+        print('⏳ Firebase: Waiting for Firebase to initialize...');
+        int attempts = 0;
+        const maxAttempts = 10;
+
+        while (!_isInitialized && attempts < maxAttempts) {
+          await Future.delayed(const Duration(milliseconds: 500));
+          attempts++;
+          print('⏳ Firebase: Waiting for initialization... (attempt $attempts/$maxAttempts)');
+        }
+
+        if (!_isInitialized) {
+          print('❌ Firebase: Failed to initialize within timeout');
+          return;
+        }
+      }
+
+      // Thử lấy lại token sau khi đã khởi tạo
+      try {
+        _fcmToken = await messaging.getToken();
+        if (_fcmToken != null) {
+          print('🔑 Firebase: Retrieved FCM token, sending to server...');
+          await _sendTokenToServer();
+        } else {
+          print('❌ Firebase: Still no FCM token available after initialization');
+        }
+      } catch (e) {
+        print('❌ Firebase: Failed to get FCM token: $e');
+      }
+    }
   }
 
   /// Xóa thông tin user hiện tại (khi logout)
