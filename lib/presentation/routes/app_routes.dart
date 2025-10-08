@@ -1,7 +1,5 @@
 import 'package:flutter_camera/presentation/ui/home/pages/home_page.dart';
 import 'package:flutter_camera/presentation/ui/login/page/login_page.dart';
-import 'package:flutter_camera/presentation/ui/notification/pages/notification_page.dart';
-import 'package:flutter_camera/presentation/ui/notification/pages/notification_list_page.dart';
 
 class AppRoutes {
   static const String login = '/login';
@@ -20,8 +18,7 @@ final routes = {
   AppRoutes.login: (_) => const LoginPage(),
   AppRoutes.home: (_) => const HomePage(),
   // OnvifCameraPage requires parameters, handle in MaterialApp.onGenerateRoute
-  AppRoutes.notification: (_) => const NotificationPage(),
-  AppRoutes.notificationList: (_) => const NotificationListPage(),
+  // NotificationPage and NotificationListPage are embedded in HomePage with filter parameters
   // NotificationDetailPage requires parameters, handle in MaterialApp.onGenerateRoute
   // OnvifCameraPage requires Camera argument, handle in MaterialApp.onGenerateRoute
 };

@@ -1,14 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_camera/presentation/ui/notification/bloc/notification_list_bloc.dart';
-import 'package:flutter_camera/data/local/preference/auth_local_preference.dart';
-import 'package:flutter_camera/data/network/api/notification_api_service.dart';
-import 'package:flutter_camera/data/network/repositories/notification_repository_impl.dart';
-import 'package:flutter_camera/domain/usecase/notification/get_notifications_use_case.dart';
 import 'package:flutter_camera/presentation/ui/notification/pages/notification_detail_page.dart';
 import 'package:flutter_camera/presentation/ui/shared/design_system.dart';
-import 'package:flutter_camera/di/injection.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_camera/presentation/ui/notification/models/notification_filter.dart';
+import 'package:flutter_camera/data/network/model/notification_list_response.dart';
 
 // Màu sắc notification theo trạng thái
 class NotificationColors {
@@ -27,37 +23,67 @@ class NotificationColors {
 }
 
 class NotificationListPage extends StatelessWidget {
-  const NotificationListPage({super.key});
+  final NotificationFilter filter;
+
+  const NotificationListPage({super.key, required this.filter});
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<SharedPreferences>(
-      future: SharedPreferences.getInstance(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return AppWidgets.buildLoadingIndicator(message: 'Loading temperature warnings...');
-        }
-
-        final prefs = snapshot.data!;
-        final authLocalPreference = AuthLocalPreference(prefs);
-        final apiService = getIt<NotificationApiService>();
-        final repository = NotificationsRepositoryImpl(apiService);
-        final useCase = GetNotificationsUseCase(repository);
-
-        return BlocProvider(
-          create: (context) => NotificationListBloc(
-            getNotificationsUseCase: useCase,
-            authLocalPreference: authLocalPreference,
-          )..add(FetchNotificationList()),
-          child: const NotificationListView(),
-        );
-      },
-    );
+    return NotificationListView(filter: filter);
   }
 }
 
 class NotificationListView extends StatelessWidget {
-  const NotificationListView({super.key});
+  final NotificationFilter filter;
+
+  const NotificationListView({super.key, required this.filter});
+
+  List<NotificationItem> _applyFilter(List<NotificationItem> notifications) {
+    var filtered = notifications;
+
+    // Filter by time range
+    if (filter.startDate != null && filter.endDate != null) {
+      filtered = filtered.where((item) {
+        if (item.dataTime == null) return false;
+        try {
+          final itemDate = DateTime.parse(item.dataTime!);
+          return itemDate.isAfter(filter.startDate!.subtract(const Duration(days: 1))) &&
+              itemDate.isBefore(filter.endDate!.add(const Duration(days: 1)));
+        } catch (e) {
+          return false;
+        }
+      }).toList();
+    }
+
+    // Filter by compareTypeCode
+    if (filter.compareTypeCode != null) {
+      filtered = filtered.where((item) {
+        return item.compareTypeObject?.code == filter.compareTypeCode;
+      }).toList();
+    }
+
+    // Filter by areaName (exact match)
+    if (filter.areaName != null && filter.areaName!.isNotEmpty) {
+      filtered = filtered.where((item) {
+        return item.areaName == filter.areaName;
+      }).toList();
+    }
+
+    // Filter by statusCode
+    if (filter.statusCode != null) {
+      filtered = filtered.where((item) {
+        final statusName = item.statusObject?.name;
+        if (filter.statusCode == 'PENDING') {
+          return statusName == 'Chưa xử lý';
+        } else if (filter.statusCode == 'RESOLVED') {
+          return statusName == 'Đã xử lý';
+        }
+        return false;
+      }).toList();
+    }
+
+    return filtered;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -80,13 +106,18 @@ class NotificationListView extends StatelessWidget {
               ),
             );
           } else if (state is NotificationListLoaded) {
-            final notifications = state.notifications;
+            final allNotifications = state.notifications;
+            final filteredNotifications = _applyFilter(allNotifications);
 
-            if (notifications.isEmpty) {
+            if (filteredNotifications.isEmpty) {
               return AppWidgets.buildEmptyState(
                 icon: Icons.thermostat_outlined,
-                title: 'No temperature warnings',
-                subtitle: 'There are no temperature threshold warnings at this time',
+                title: allNotifications.isEmpty
+                    ? 'No temperature warnings'
+                    : 'No matching notifications',
+                subtitle: allNotifications.isEmpty
+                    ? 'There are no temperature threshold warnings at this time'
+                    : 'Try adjusting your filter criteria',
               );
             }
 
@@ -158,7 +189,7 @@ class NotificationListView extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
                     sliver: SliverList(
                       delegate: SliverChildBuilderDelegate((context, index) {
-                        final notification = notifications[index];
+                        final notification = filteredNotifications[index];
                         final isProcessed = notification.statusObject?.name == "Đã xử lý";
 
                         // Phân loại màu sắc theo trạng thái:
@@ -327,7 +358,8 @@ class NotificationListView extends StatelessWidget {
                                             Row(
                                               children: [
                                                 Text(
-                                                  notification.compareTypeObject?.name.toString() ?? '',
+                                                  notification.compareTypeObject?.name.toString() ??
+                                                      '',
                                                   style: AppTextStyles.bodyMedium.copyWith(
                                                     color: AppColors.textSecondary,
                                                   ),
@@ -444,7 +476,7 @@ class NotificationListView extends StatelessWidget {
                             ),
                           ),
                         );
-                      }, childCount: notifications.length),
+                      }, childCount: filteredNotifications.length),
                     ),
                   ),
                   // Bottom padding
