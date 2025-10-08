@@ -859,7 +859,7 @@ class _FilterDialogContentState extends State<_FilterDialogContent> {
                   borderRadius: BorderRadius.circular(AppBorderRadius.small),
                 ),
               ),
-              child: const Text('Áp dụng bộ lọc'),
+              child: const Text('Áp dụng'),
             ),
           ),
         ),
