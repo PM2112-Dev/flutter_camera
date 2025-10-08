@@ -727,6 +727,19 @@ class _FilterDialogContentState extends State<_FilterDialogContent> {
                         },
                       ),
                       _buildFilterOption(
+                        title: '3 ngày qua',
+                        selected: _localFilter.timeRange == '3days',
+                        onTap: () {
+                          setState(() {
+                            _localFilter = _localFilter.copyWith(
+                              timeRange: '3days',
+                              startDate: DateTime.now().subtract(const Duration(days: 3)),
+                              endDate: DateTime.now(),
+                            );
+                          });
+                        },
+                      ),
+                      _buildFilterOption(
                         title: '7 ngày qua',
                         selected: _localFilter.timeRange == '7days',
                         onTap: () {
@@ -739,19 +752,19 @@ class _FilterDialogContentState extends State<_FilterDialogContent> {
                           });
                         },
                       ),
-                      _buildFilterOption(
-                        title: '30 ngày qua',
-                        selected: _localFilter.timeRange == '30days',
-                        onTap: () {
-                          setState(() {
-                            _localFilter = _localFilter.copyWith(
-                              timeRange: '30days',
-                              startDate: DateTime.now().subtract(const Duration(days: 30)),
-                              endDate: DateTime.now(),
-                            );
-                          });
-                        },
-                      ),
+                      // _buildFilterOption(
+                      //   title: '30 ngày qua',
+                      //   selected: _localFilter.timeRange == '30days',
+                      //   onTap: () {
+                      //     setState(() {
+                      //       _localFilter = _localFilter.copyWith(
+                      //         timeRange: '30days',
+                      //         startDate: DateTime.now().subtract(const Duration(days: 30)),
+                      //         endDate: DateTime.now(),
+                      //       );
+                      //     });
+                      //   },
+                      // ),
                     ],
                   ),
                 ),
