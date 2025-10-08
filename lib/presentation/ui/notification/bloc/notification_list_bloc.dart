@@ -35,7 +35,7 @@ class NotificationListBloc
         return;
       }
 
-      final request = NotificationListRequest(page: 1, pageSize: 20);
+      final request = NotificationListRequest(page: 1, pageSize: 100);
 
       final response = await getNotificationsUseCase(
         request: request,
