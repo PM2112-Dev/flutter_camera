@@ -24,7 +24,6 @@ import 'package:flutter_camera/data/network/repositories/notification_repository
 import 'package:flutter_camera/domain/usecase/notification/get_notifications_use_case.dart';
 import 'package:flutter_camera/presentation/ui/notification/models/notification_filter.dart';
 import 'package:flutter_camera/domain/model/area_tree.dart';
-
 import 'package:shared_preferences/shared_preferences.dart';
 
 // Helper classes for filter options
@@ -201,7 +200,6 @@ class _HomePageState extends State<HomePage> {
     if (renderBox == null) return;
 
     final position = renderBox.localToGlobal(Offset.zero);
-    final size = renderBox.size;
 
     showDialog(
       context: context,
@@ -373,7 +371,7 @@ class _HomePageState extends State<HomePage> {
                                           width: 8,
                                           height: 8,
                                           decoration: const BoxDecoration(
-                                            color: AppColors.warning,
+                                            color: AppColors.info,
                                             shape: BoxShape.circle,
                                           ),
                                         ),
@@ -537,6 +535,12 @@ class _FilterDialogContentState extends State<_FilterDialogContent> {
   List<CompareTypeOption> _availableCompareTypes = [];
   List<String> _availableAreas = [];
 
+  // Expand/collapse states
+  bool _isTimeExpanded = true;
+  bool _isCompareTypeExpanded = true;
+  bool _isAreaExpanded = true;
+  bool _isStatusExpanded = true;
+
   // Fixed status options
   final List<StatusOption> _fixedStatuses = [
     StatusOption(code: 'PENDING', name: 'Chưa xử lý'),
@@ -547,7 +551,29 @@ class _FilterDialogContentState extends State<_FilterDialogContent> {
   void initState() {
     super.initState();
     _localFilter = widget.filter;
+    _loadExpandStates();
     _extractAvailableOptions();
+  }
+
+  Future<void> _loadExpandStates() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _isTimeExpanded = prefs.getBool('filter_time_expanded') ?? true;
+        _isCompareTypeExpanded = prefs.getBool('filter_compareType_expanded') ?? true;
+        _isAreaExpanded = prefs.getBool('filter_area_expanded') ?? true;
+        _isStatusExpanded = prefs.getBool('filter_status_expanded') ?? true;
+      });
+      print(
+        '📥 Loaded expand states: Time=$_isTimeExpanded, Compare=$_isCompareTypeExpanded, Area=$_isAreaExpanded, Status=$_isStatusExpanded',
+      );
+    }
+  }
+
+  Future<void> _saveExpandState(String key, bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(key, value);
+    print('💾 Saved $key = $value');
   }
 
   void _extractAvailableOptions() {
@@ -640,7 +666,7 @@ class _FilterDialogContentState extends State<_FilterDialogContent> {
         Container(
           padding: const EdgeInsets.all(AppSpacing.md),
           decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.05),
+            color: AppColors.info.withOpacity(0.08),
             borderRadius: const BorderRadius.only(
               topLeft: Radius.circular(AppBorderRadius.medium),
               topRight: Radius.circular(AppBorderRadius.medium),
@@ -649,12 +675,18 @@ class _FilterDialogContentState extends State<_FilterDialogContent> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Bộ lọc', style: AppTextStyles.headline3.copyWith(color: AppColors.primary)),
+              Row(
+                children: [
+                  Icon(Icons.filter_alt, size: 20, color: AppColors.info),
+                  const SizedBox(width: AppSpacing.xs),
+                  Text('Bộ lọc', style: AppTextStyles.headline3.copyWith(color: AppColors.info)),
+                ],
+              ),
               TextButton(
                 onPressed: widget.onClearAll,
                 child: Text(
                   'Xóa tất cả',
-                  style: AppTextStyles.bodyMedium.copyWith(color: AppColors.primary),
+                  style: AppTextStyles.bodyMedium.copyWith(color: AppColors.info),
                 ),
               ),
             ],
@@ -670,9 +702,15 @@ class _FilterDialogContentState extends State<_FilterDialogContent> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Time Range Filter
-                _buildFilterSection(
+                _buildExpandableFilterSection(
                   title: 'Thời gian',
                   icon: Icons.calendar_today,
+                  isExpanded: _isTimeExpanded,
+                  onToggle: () {
+                    final newValue = !_isTimeExpanded;
+                    setState(() => _isTimeExpanded = newValue);
+                    _saveExpandState('filter_time_expanded', newValue);
+                  },
                   child: Column(
                     children: [
                       _buildFilterOption(
@@ -721,9 +759,15 @@ class _FilterDialogContentState extends State<_FilterDialogContent> {
                 const Divider(height: 1),
 
                 // Compare Type Filter
-                _buildFilterSection(
+                _buildExpandableFilterSection(
                   title: 'Loại so sánh',
                   icon: Icons.compare_arrows,
+                  isExpanded: _isCompareTypeExpanded,
+                  onToggle: () {
+                    final newValue = !_isCompareTypeExpanded;
+                    setState(() => _isCompareTypeExpanded = newValue);
+                    _saveExpandState('filter_compareType_expanded', newValue);
+                  },
                   child: _availableCompareTypes.isEmpty
                       ? Padding(
                           padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
@@ -760,9 +804,15 @@ class _FilterDialogContentState extends State<_FilterDialogContent> {
                 const Divider(height: 1),
 
                 // Area Filter
-                _buildFilterSection(
+                _buildExpandableFilterSection(
                   title: 'Khu vực',
                   icon: Icons.location_on,
+                  isExpanded: _isAreaExpanded,
+                  onToggle: () {
+                    final newValue = !_isAreaExpanded;
+                    setState(() => _isAreaExpanded = newValue);
+                    _saveExpandState('filter_area_expanded', newValue);
+                  },
                   child: _availableAreas.isEmpty
                       ? Padding(
                           padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
@@ -807,9 +857,15 @@ class _FilterDialogContentState extends State<_FilterDialogContent> {
                 const Divider(height: 1),
 
                 // Status Filter
-                _buildFilterSection(
+                _buildExpandableFilterSection(
                   title: 'Trạng thái',
                   icon: Icons.check_circle_outline,
+                  isExpanded: _isStatusExpanded,
+                  onToggle: () {
+                    final newValue = !_isStatusExpanded;
+                    setState(() => _isStatusExpanded = newValue);
+                    _saveExpandState('filter_status_expanded', newValue);
+                  },
                   child: Column(
                     children: _fixedStatuses.map((status) {
                       return _buildFilterOption(
@@ -852,12 +908,13 @@ class _FilterDialogContentState extends State<_FilterDialogContent> {
                 widget.onFilterChanged(_localFilter);
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
+                backgroundColor: AppColors.info,
                 foregroundColor: AppColors.textOnPrimary,
                 padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(AppBorderRadius.small),
                 ),
+                elevation: 2,
               ),
               child: const Text('Áp dụng'),
             ),
@@ -867,31 +924,64 @@ class _FilterDialogContentState extends State<_FilterDialogContent> {
     );
   }
 
-  Widget _buildFilterSection({
+  Widget _buildExpandableFilterSection({
     required String title,
     required IconData icon,
     required Widget child,
+    required bool isExpanded,
+    required VoidCallback onToggle,
   }) {
     return Padding(
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.xs),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(icon, size: 18, color: AppColors.primary),
-              const SizedBox(width: AppSpacing.xs),
-              Text(
-                title,
-                style: AppTextStyles.bodyMedium.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
+          InkWell(
+            onTap: onToggle,
+            borderRadius: BorderRadius.circular(AppBorderRadius.small),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                vertical: AppSpacing.sm,
+                horizontal: AppSpacing.xs,
               ),
-            ],
+              child: Row(
+                children: [
+                  Icon(icon, size: 18, color: AppColors.info),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                  AnimatedRotation(
+                    turns: isExpanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: const Icon(
+                      Icons.keyboard_arrow_down,
+                      size: 20,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-          const SizedBox(height: AppSpacing.sm),
-          child,
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            child: isExpanded
+                ? Column(
+                    children: [
+                      const SizedBox(height: AppSpacing.xs),
+                      child,
+                    ],
+                  )
+                : const SizedBox.shrink(),
+          ),
         ],
       ),
     );
@@ -908,10 +998,10 @@ class _FilterDialogContentState extends State<_FilterDialogContent> {
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
         margin: const EdgeInsets.only(bottom: AppSpacing.xs),
         decoration: BoxDecoration(
-          color: selected ? AppColors.primary.withOpacity(0.1) : Colors.transparent,
+          color: selected ? AppColors.info.withOpacity(0.1) : Colors.transparent,
           borderRadius: BorderRadius.circular(AppBorderRadius.small),
           border: Border.all(
-            color: selected ? AppColors.primary : AppColors.border,
+            color: selected ? AppColors.info : AppColors.border,
             width: selected ? 1.5 : 0.5,
           ),
         ),
@@ -922,7 +1012,7 @@ class _FilterDialogContentState extends State<_FilterDialogContent> {
               child: Text(
                 title,
                 style: AppTextStyles.bodyMedium.copyWith(
-                  color: selected ? AppColors.primary : AppColors.textPrimary,
+                  color: selected ? AppColors.info : AppColors.textPrimary,
                   fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
                 ),
                 maxLines: 2,
@@ -931,7 +1021,7 @@ class _FilterDialogContentState extends State<_FilterDialogContent> {
             ),
             if (selected) ...[
               const SizedBox(width: AppSpacing.xs),
-              const Icon(Icons.check, size: 18, color: AppColors.primary),
+              const Icon(Icons.check_circle, size: 18, color: AppColors.info),
             ],
           ],
         ),
