@@ -19,6 +19,10 @@ import 'package:flutter_camera/data/local/preference/pin_camera_preference.dart'
 import 'package:flutter_camera/data/local/preference/selected_cameras_preference.dart'
     as _i547;
 import 'package:flutter_camera/data/network/api/area_api_service.dart' as _i990;
+import 'package:flutter_camera/data/network/api/area_devices_api_service.dart'
+    as _i1036;
+import 'package:flutter_camera/data/network/api/area_map_api_service.dart'
+    as _i856;
 import 'package:flutter_camera/data/network/api/auth_api_service.dart' as _i531;
 import 'package:flutter_camera/data/network/api/camera_control_api_service.dart'
     as _i951;
@@ -30,6 +34,10 @@ import 'package:flutter_camera/data/network/api/user_token_api_service.dart'
     as _i1045;
 import 'package:flutter_camera/data/network/api/vision_notification_api_service.dart'
     as _i827;
+import 'package:flutter_camera/data/network/repositories/area_devices_repository_impl.dart'
+    as _i819;
+import 'package:flutter_camera/data/network/repositories/area_map_repository_impl.dart'
+    as _i828;
 import 'package:flutter_camera/data/network/repositories/area_repository_impl.dart'
     as _i964;
 import 'package:flutter_camera/data/network/repositories/auth_repository_impl.dart'
@@ -48,6 +56,10 @@ import 'package:flutter_camera/data/services/screenshot_service.dart' as _i170;
 import 'package:flutter_camera/data/services/stream_server_service.dart'
     as _i793;
 import 'package:flutter_camera/di/injection.dart' as _i995;
+import 'package:flutter_camera/domain/repositories/area_devices_repository.dart'
+    as _i627;
+import 'package:flutter_camera/domain/repositories/area_map_repository.dart'
+    as _i719;
 import 'package:flutter_camera/domain/repositories/area_repository.dart'
     as _i170;
 import 'package:flutter_camera/domain/repositories/auth_repository.dart'
@@ -62,6 +74,10 @@ import 'package:flutter_camera/domain/repositories/vision_notifications_reposito
     as _i983;
 import 'package:flutter_camera/domain/usecase/area/get_all_tree_use_case.dart'
     as _i203;
+import 'package:flutter_camera/domain/usecase/area/get_area_devices_use_case.dart'
+    as _i519;
+import 'package:flutter_camera/domain/usecase/area/get_area_map_use_case.dart'
+    as _i973;
 import 'package:flutter_camera/domain/usecase/auth/check_auth_status_usecase.dart'
     as _i1064;
 import 'package:flutter_camera/domain/usecase/auth/get_profile_use_case.dart'
@@ -84,6 +100,10 @@ import 'package:flutter_camera/domain/usecase/notification/get_notifications_use
     as _i362;
 import 'package:flutter_camera/domain/usecase/vision_notification/get_vision_notifications_use_case.dart'
     as _i527;
+import 'package:flutter_camera/presentation/bloc/area_devices/area_devices_bloc.dart'
+    as _i489;
+import 'package:flutter_camera/presentation/bloc/area_map/area_map_bloc.dart'
+    as _i828;
 import 'package:flutter_camera/presentation/bloc/auth/auth_bloc.dart' as _i649;
 import 'package:flutter_camera/presentation/bloc/camera_control/camera_control_bloc.dart'
     as _i470;
@@ -146,6 +166,12 @@ extension GetItInjectableX on _i174.GetIt {
         gh<_i183.AuthLocalPreference>(),
       ),
     );
+    gh.factory<_i856.AreaMapApiService>(
+      () => _i856.AreaMapApiService(
+        gh<_i361.Dio>(),
+        gh<_i183.AuthLocalPreference>(),
+      ),
+    );
     gh.factory<_i678.NotificationApiService>(
       () => _i678.NotificationApiService(
         gh<_i361.Dio>(),
@@ -155,6 +181,18 @@ extension GetItInjectableX on _i174.GetIt {
     gh.factory<_i827.VisionNotificationApiService>(
       () => _i827.VisionNotificationApiService(
         gh<_i361.Dio>(),
+        gh<_i183.AuthLocalPreference>(),
+      ),
+    );
+    gh.factory<_i1036.AreaDevicesApiService>(
+      () => _i1036.AreaDevicesApiService(
+        gh<_i361.Dio>(),
+        gh<_i183.AuthLocalPreference>(),
+      ),
+    );
+    gh.factory<_i719.AreaMapRepository>(
+      () => _i828.AreaMapRepositoryImpl(
+        gh<_i856.AreaMapApiService>(),
         gh<_i183.AuthLocalPreference>(),
       ),
     );
@@ -215,6 +253,9 @@ extension GetItInjectableX on _i174.GetIt {
       () =>
           _i299.CameraStreamRepositoryImpl(gh<_i174.CameraStreamApiService>()),
     );
+    gh.factory<_i973.GetAreaMapUseCase>(
+      () => _i973.GetAreaMapUseCase(gh<_i719.AreaMapRepository>()),
+    );
     gh.factory<_i999.GetNotificationDetailUseCase>(
       () => _i999.GetNotificationDetailUseCase(
         gh<_i819.NotificationsRepository>(),
@@ -222,6 +263,12 @@ extension GetItInjectableX on _i174.GetIt {
     );
     gh.factory<_i362.GetNotificationsUseCase>(
       () => _i362.GetNotificationsUseCase(gh<_i819.NotificationsRepository>()),
+    );
+    gh.factory<_i627.AreaDevicesRepository>(
+      () => _i819.AreaDevicesRepositoryImpl(
+        gh<_i1036.AreaDevicesApiService>(),
+        gh<_i183.AuthLocalPreference>(),
+      ),
     );
     gh.lazySingleton<_i88.AuthRepository>(
       () => _i162.AuthRepositoryImpl(
@@ -252,6 +299,9 @@ extension GetItInjectableX on _i174.GetIt {
         getNotificationDetailUseCase: gh<_i999.GetNotificationDetailUseCase>(),
         authLocalPreference: gh<_i183.AuthLocalPreference>(),
       ),
+    );
+    gh.factory<_i828.AreaMapBloc>(
+      () => _i828.AreaMapBloc(gh<_i973.GetAreaMapUseCase>()),
     );
     gh.factory<_i392.GetStoredTokensUseCase>(
       () => _i392.GetStoredTokensUseCase(gh<_i88.AuthRepository>()),
@@ -291,8 +341,14 @@ extension GetItInjectableX on _i174.GetIt {
         gh<_i935.FirebaseMessagingService>(),
       ),
     );
+    gh.factory<_i519.GetAreaDevicesUseCase>(
+      () => _i519.GetAreaDevicesUseCase(gh<_i627.AreaDevicesRepository>()),
+    );
     gh.factory<_i840.DeviceBloc>(
       () => _i840.DeviceBloc(gh<_i203.GetAllTreeUseCase>()),
+    );
+    gh.factory<_i489.AreaDevicesBloc>(
+      () => _i489.AreaDevicesBloc(gh<_i519.GetAreaDevicesUseCase>()),
     );
     return this;
   }

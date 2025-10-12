@@ -14,11 +14,7 @@ class NotificationDetailPage extends StatelessWidget {
   final String notificationId;
   final String dataTime;
 
-  const NotificationDetailPage({
-    super.key,
-    required this.notificationId,
-    required this.dataTime,
-  });
+  const NotificationDetailPage({super.key, required this.notificationId, required this.dataTime});
 
   @override
   Widget build(BuildContext context) {
@@ -47,9 +43,7 @@ class NotificationDetailPage extends StatelessWidget {
         future: SharedPreferences.getInstance(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
-            return AppWidgets.buildLoadingIndicator(
-              message: 'Loading detail...',
-            );
+            return AppWidgets.buildLoadingIndicator(message: 'Loading detail...');
           }
           final prefs = snapshot.data!;
           final authLocalPreference = AuthLocalPreference(prefs);
@@ -58,16 +52,10 @@ class NotificationDetailPage extends StatelessWidget {
           final useCase = GetNotificationDetailUseCase(repository);
 
           return BlocProvider(
-            create: (context) =>
-                NotificationDetailBloc(
-                  getNotificationDetailUseCase: useCase,
-                  authLocalPreference: authLocalPreference,
-                )..add(
-                  FetchNotificationDetail(
-                    id: notificationId,
-                    dataTime: dataTime,
-                  ),
-                ),
+            create: (context) => NotificationDetailBloc(
+              getNotificationDetailUseCase: useCase,
+              authLocalPreference: authLocalPreference,
+            )..add(FetchNotificationDetail(id: notificationId, dataTime: dataTime)),
             child: const NotificationDetailView(),
           );
         },
@@ -84,9 +72,7 @@ class NotificationDetailView extends StatelessWidget {
     return BlocBuilder<NotificationDetailBloc, NotificationDetailState>(
       builder: (context, state) {
         if (state is NotificationDetailLoading) {
-          return AppWidgets.buildLoadingIndicator(
-            message: 'Loading notification detail...',
-          );
+          return AppWidgets.buildLoadingIndicator(message: 'Loading notification detail...');
         } else if (state is NotificationDetailError) {
           return AppWidgets.buildEmptyState(
             icon: Icons.error_outline,
@@ -111,7 +97,7 @@ class NotificationDetailView extends StatelessWidget {
 
                 // Image Section
                 if (detail.imagePath != null) ...[
-                  _buildImageSection(detail),
+                  _buildImageSection(context, detail),
                   const SizedBox(height: AppSpacing.md),
                 ],
 
@@ -141,97 +127,7 @@ class NotificationDetailView extends StatelessWidget {
     );
   }
 
-  Widget _buildHeaderCard(NotificationDetailData detail) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppColors.warning.withOpacity(0.1),
-            AppColors.primary.withOpacity(0.05),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(AppBorderRadius.large),
-        border: Border.all(color: AppColors.warning.withOpacity(0.3)),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.warning.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.warning.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(AppBorderRadius.medium),
-                ),
-                child: const Icon(
-                  Icons.thermostat,
-                  color: AppColors.warning,
-                  size: 28,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Cảnh báo nhiệt độ',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: AppColors.warning,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      detail.warningEventName ?? 'Temperature Alert',
-                      style: AppTextStyles.headline3.copyWith(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.sm,
-              vertical: AppSpacing.xs,
-            ),
-            decoration: BoxDecoration(
-              color: AppColors.warning.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(AppBorderRadius.small),
-            ),
-            child: Text(
-              'ID: ${detail.id ?? 'N/A'}',
-              style: AppTextStyles.bodySmall.copyWith(
-                color: AppColors.warning,
-                fontFamily: 'monospace',
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildImageSection(NotificationDetailData detail) {
+  Widget _buildImageSection(BuildContext context, NotificationDetailData detail) {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -259,60 +155,105 @@ class NotificationDetailView extends StatelessWidget {
               ],
             ),
           ),
-          ClipRRect(
-            borderRadius: const BorderRadius.only(
-              bottomLeft: Radius.circular(AppBorderRadius.large),
-              bottomRight: Radius.circular(AppBorderRadius.large),
-            ),
-            child: AspectRatio(
-              aspectRatio: 16 / 9,
-              child: Image.network(
-                detail.imagePath!,
-                fit: BoxFit.cover,
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Container(
-                    color: AppColors.surface,
-                    child: Center(
-                      child: CircularProgressIndicator(
-                        value: loadingProgress.expectedTotalBytes != null
-                            ? loadingProgress.cumulativeBytesLoaded /
-                                  loadingProgress.expectedTotalBytes!
-                            : null,
-                        color: AppColors.primary,
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => FullScreenImageViewer(
+                    imageUrl: detail.imagePath!,
+                    title: detail.warningEventName ?? 'Hình ảnh nhiệt',
+                  ),
+                ),
+              );
+            },
+            child: ClipRRect(
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(AppBorderRadius.large),
+                bottomRight: Radius.circular(AppBorderRadius.large),
+              ),
+              child: AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Stack(
+                  children: [
+                    Image.network(
+                      detail.imagePath!,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Container(
+                          color: AppColors.surface,
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              value: loadingProgress.expectedTotalBytes != null
+                                  ? loadingProgress.cumulativeBytesLoaded /
+                                        loadingProgress.expectedTotalBytes!
+                                  : null,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          color: AppColors.error.withOpacity(0.1),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.image_not_supported, color: AppColors.error, size: 48),
+                              const SizedBox(height: AppSpacing.sm),
+                              Text(
+                                'Không thể tải hình ảnh',
+                                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.error),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Vui lòng kiểm tra kết nối mạng',
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                    // Overlay hint
+                    Positioned(
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.md,
+                          vertical: AppSpacing.sm,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
+                            colors: [Colors.black.withOpacity(0.6), Colors.transparent],
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.zoom_in, size: 16, color: Colors.white.withOpacity(0.9)),
+                            const SizedBox(width: AppSpacing.xs),
+                            Text(
+                              'Nhấn để xem toàn màn hình',
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: Colors.white.withOpacity(0.9),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  );
-                },
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    color: AppColors.error.withOpacity(0.1),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.image_not_supported,
-                          color: AppColors.error,
-                          size: 48,
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        Text(
-                          'Không thể tải hình ảnh',
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            color: AppColors.error,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Vui lòng kiểm tra kết nối mạng',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
+                  ],
+                ),
               ),
             ),
           ),
@@ -336,11 +277,7 @@ class NotificationDetailView extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(
-                Icons.info_outline,
-                color: AppColors.textSecondary,
-                size: 20,
-              ),
+              Icon(Icons.info_outline, color: AppColors.textSecondary, size: 20),
               const SizedBox(width: AppSpacing.sm),
               Text(
                 'Thông tin chi tiết',
@@ -359,6 +296,12 @@ class NotificationDetailView extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.sm),
           _buildDetailRow(
+            'Kiểu cảnh báo',
+            detail.compareTypeObject?.name ?? 'Không xác định',
+            icon: Icons.compare_arrows,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _buildDetailRow(
             'Trạng thái',
             detail.statusObject?.name ?? 'Chưa xác định',
             icon: Icons.info,
@@ -366,8 +309,8 @@ class NotificationDetailView extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.sm),
           _buildDetailRow(
-            'Mức độ',
-            'Cao',
+            'Đánh giá',
+            detail.compareResultObject?.name ?? 'Không xác định',
             icon: Icons.priority_high,
             valueColor: AppColors.warning,
           ),
@@ -408,18 +351,14 @@ class NotificationDetailView extends StatelessWidget {
           if (detail.areaName != null && detail.machineName != null)
             const SizedBox(height: AppSpacing.sm),
           if (detail.machineName != null)
-            _buildDetailRow(
-              'Máy móc',
-              detail.machineName!,
-              icon: Icons.precision_manufacturing,
-            ),
+            _buildDetailRow('Thiết bị', detail.machineName!, icon: Icons.precision_manufacturing),
           if (detail.machineComponentName != null) ...[
             const SizedBox(height: AppSpacing.sm),
-            _buildDetailRow(
-              'Thành phần',
-              detail.machineComponentName!,
-              icon: Icons.settings,
-            ),
+            _buildDetailRow('Bộ phận', detail.machineComponentName!, icon: Icons.settings),
+          ],
+          if (detail.monitorPointCode != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _buildDetailRow('Điểm nhiệt', detail.monitorPointCode!, icon: Icons.thermostat),
           ],
         ],
       ),
@@ -453,9 +392,17 @@ class NotificationDetailView extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.md),
+          // if (detail.compareMinTemperature != null) ...[
+          //   _buildDetailRow(
+          //     'Đối tượng so sánh',
+          //     '${detail.compareComponent}',
+          //     icon: Icons.precision_manufacturing,
+          //   ),
+          // ],
+          // const SizedBox(height: AppSpacing.sm),
           if (detail.componentValue != null)
             _buildDetailRow(
-              'Nhiệt độ hiện tại',
+              'Nhiệt độ hiện tại - ${detail.monitorPointCode}',
               '${detail.componentValue!.toStringAsFixed(1)}°C',
               icon: Icons.thermostat,
               valueColor: AppColors.warning,
@@ -463,7 +410,7 @@ class NotificationDetailView extends StatelessWidget {
           if (detail.compareValue != null) ...[
             const SizedBox(height: AppSpacing.sm),
             _buildDetailRow(
-              'Nhiệt độ so sánh',
+              'Nhiệt độ so sánh - ${detail.compareMonitorPoint}',
               '${detail.compareValue!.toStringAsFixed(1)}°C',
               icon: Icons.compare,
             ),
@@ -474,9 +421,7 @@ class NotificationDetailView extends StatelessWidget {
               'Chênh lệch',
               '${detail.deltaValue!.toStringAsFixed(1)}°C',
               icon: Icons.trending_up,
-              valueColor: detail.deltaValue! > 10
-                  ? AppColors.error
-                  : AppColors.textPrimary,
+              valueColor: detail.deltaValue! > 10 ? AppColors.error : AppColors.textPrimary,
             ),
           ],
         ],
@@ -518,11 +463,7 @@ class NotificationDetailView extends StatelessWidget {
           ),
           if (detail.dataTime != null) ...[
             const SizedBox(height: AppSpacing.sm),
-            _buildDetailRow(
-              'Thời gian dữ liệu',
-              detail.dataTime!,
-              icon: Icons.access_time,
-            ),
+            _buildDetailRow('Thời gian dữ liệu', detail.dataTime!, icon: Icons.access_time),
           ],
           if (detail.resolveTime != null) ...[
             const SizedBox(height: AppSpacing.sm),
@@ -546,12 +487,7 @@ class NotificationDetailView extends StatelessWidget {
     );
   }
 
-  Widget _buildDetailRow(
-    String label,
-    String value, {
-    IconData? icon,
-    Color? valueColor,
-  }) {
+  Widget _buildDetailRow(String label, String value, {IconData? icon, Color? valueColor}) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -560,7 +496,7 @@ class NotificationDetailView extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
         ],
         Expanded(
-          flex: 2,
+          flex: 3,
           child: Text(
             label,
             style: AppTextStyles.bodyMedium.copyWith(
@@ -570,7 +506,7 @@ class NotificationDetailView extends StatelessWidget {
           ),
         ),
         Expanded(
-          flex: 3,
+          flex: 2,
           child: Text(
             value,
             style: AppTextStyles.bodyMedium.copyWith(
@@ -598,5 +534,136 @@ class NotificationDetailView extends StatelessWidget {
       default:
         return AppColors.primary;
     }
+  }
+}
+
+// Full Screen Image Viewer with Zoom
+class FullScreenImageViewer extends StatefulWidget {
+  final String imageUrl;
+  final String title;
+
+  const FullScreenImageViewer({super.key, required this.imageUrl, required this.title});
+
+  @override
+  State<FullScreenImageViewer> createState() => _FullScreenImageViewerState();
+}
+
+class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
+  final TransformationController _transformationController = TransformationController();
+  TapDownDetails? _doubleTapDetails;
+
+  @override
+  void dispose() {
+    _transformationController.dispose();
+    super.dispose();
+  }
+
+  void _handleDoubleTapDown(TapDownDetails details) {
+    _doubleTapDetails = details;
+  }
+
+  void _handleDoubleTap() {
+    if (_transformationController.value != Matrix4.identity()) {
+      // Reset zoom
+      _transformationController.value = Matrix4.identity();
+    } else {
+      // Zoom in to 3x at tap position
+      final position = _doubleTapDetails!.localPosition;
+      _transformationController.value = Matrix4.identity()
+        ..translate(-position.dx, -position.dy)
+        ..scale(3.0);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.close, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.fit_screen, color: Colors.white),
+            onPressed: () {
+              setState(() {
+                _transformationController.value = Matrix4.identity();
+              });
+            },
+            tooltip: 'Reset zoom',
+          ),
+        ],
+      ),
+      body: GestureDetector(
+        onDoubleTapDown: _handleDoubleTapDown,
+        onDoubleTap: _handleDoubleTap,
+        child: InteractiveViewer(
+          transformationController: _transformationController,
+          minScale: 0.1,
+          maxScale: 50.0,
+          boundaryMargin: const EdgeInsets.all(double.infinity),
+          child: Center(
+            child: Image.network(
+              widget.imageUrl,
+              fit: BoxFit.contain,
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircularProgressIndicator(
+                        value: loadingProgress.expectedTotalBytes != null
+                            ? loadingProgress.cumulativeBytesLoaded /
+                                  loadingProgress.expectedTotalBytes!
+                            : null,
+                        color: Colors.white,
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      Text(
+                        'Đang tải hình ảnh...',
+                        style: AppTextStyles.bodyMedium.copyWith(color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                );
+              },
+              errorBuilder: (context, error, stackTrace) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.image_not_supported, color: Colors.white54, size: 64),
+                      const SizedBox(height: AppSpacing.md),
+                      Text(
+                        'Không thể tải hình ảnh',
+                        style: AppTextStyles.bodyLarge.copyWith(color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+      bottomNavigationBar: Container(
+        color: Colors.black,
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).padding.bottom + AppSpacing.sm,
+          top: AppSpacing.sm,
+        ),
+        child: Text(
+          'Pinch để zoom (tối đa 50x) • Double tap để zoom 3x',
+          style: AppTextStyles.bodySmall.copyWith(color: Colors.white60),
+          textAlign: TextAlign.center,
+        ),
+      ),
+    );
   }
 }

@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_camera/presentation/ui/notification/pages/notification_page.dart';
 import 'package:flutter_camera/presentation/ui/notification/pages/notification_management_page.dart';
 import 'package:flutter_camera/presentation/ui/settings/pages/settings_page.dart';
+import 'package:flutter_camera/presentation/ui/utilities/page/utilities_page.dart';
 import 'package:flutter_camera/presentation/ui/device/bloc/device_bloc.dart';
 import 'package:flutter_camera/presentation/ui/device/bloc/device_state.dart';
 import 'package:flutter_camera/presentation/ui/notification/bloc/notification_count_bloc.dart';
@@ -24,6 +25,10 @@ import 'package:flutter_camera/data/network/repositories/notification_repository
 import 'package:flutter_camera/domain/usecase/notification/get_notifications_use_case.dart';
 import 'package:flutter_camera/presentation/ui/notification/models/notification_filter.dart';
 import 'package:flutter_camera/domain/model/area_tree.dart';
+import 'package:flutter_camera/domain/model/area_map.dart';
+import 'package:flutter_camera/presentation/bloc/area_map/area_map_bloc.dart';
+import 'package:flutter_camera/presentation/bloc/area_map/area_map_state.dart';
+import 'package:flutter_camera/presentation/bloc/area_map/area_map_event.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // Helper classes for filter options
@@ -54,7 +59,9 @@ class _HomePageState extends State<HomePage> {
   final FirebaseMessagingService _firebaseMessagingService = getIt<FirebaseMessagingService>();
   late final CameraSelectionProvider _cameraSelectionProvider;
   final GlobalKey _filterButtonKey = GlobalKey();
+  final GlobalKey _utilityButtonKey = GlobalKey();
   NotificationFilter _notificationFilter = NotificationFilter();
+  AreaMapItem? _selectedUtilityArea;
 
   @override
   void initState() {
@@ -195,6 +202,50 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  void _showUtilityDialog(BuildContext scaffoldContext) {
+    final RenderBox? renderBox = _utilityButtonKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+
+    final position = renderBox.localToGlobal(Offset.zero);
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black26,
+      builder: (BuildContext dialogContext) {
+        return Stack(
+          children: [
+            Positioned(
+              top: position.dy,
+              right: 8,
+              child: Material(
+                elevation: 8,
+                borderRadius: BorderRadius.circular(AppBorderRadius.medium),
+                child: Container(
+                  width: 320,
+                  constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.7),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(AppBorderRadius.medium),
+                    border: Border.all(color: AppColors.border, width: 0.5),
+                  ),
+                  child: _UtilitySelectionDialog(
+                    mainContext: scaffoldContext,
+                    onAreaSelected: (area) {
+                      setState(() {
+                        _selectedUtilityArea = area;
+                      });
+                      Navigator.pop(dialogContext);
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _showFilterDialog(BuildContext mainContext) {
     final RenderBox? renderBox = _filterButtonKey.currentContext?.findRenderObject() as RenderBox?;
     if (renderBox == null) return;
@@ -283,6 +334,9 @@ class _HomePageState extends State<HomePage> {
                   authLocalPreference: authLocalPreference,
                 )..add(FetchNotificationList()),
               ),
+              BlocProvider(
+                create: (context) => getIt<AreaMapBloc>()..add(const FetchAreaMapData()),
+              ),
             ],
             child: Builder(
               builder: (scaffoldContext) => Scaffold(
@@ -314,7 +368,11 @@ class _HomePageState extends State<HomePage> {
                       ),
                       centerTitle: true,
                       title: Text(
-                        _index == 0 ? 'Camera' : 'Thông Báo',
+                        _index == 0
+                            ? 'Camera'
+                            : _index == 1
+                            ? 'Tiện ích'
+                            : 'Thông Báo',
                         style: AppTextStyles.headline3.copyWith(
                           color: AppColors.textOnPrimary,
                           fontWeight: FontWeight.w600,
@@ -341,7 +399,48 @@ class _HomePageState extends State<HomePage> {
                                 ),
                               ),
                             ]
-                          : [
+                          : _index == 1
+                          ? [
+                              Container(
+                                margin: const EdgeInsets.all(AppSpacing.sm),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primaryDark.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(AppBorderRadius.small),
+                                  border: Border.all(
+                                    color: AppColors.textOnPrimary.withOpacity(0.2),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Stack(
+                                  children: [
+                                    IconButton(
+                                      key: _utilityButtonKey,
+                                      icon: const Icon(
+                                        Icons.more_vert,
+                                        color: AppColors.textOnPrimary,
+                                      ),
+                                      onPressed: () => _showUtilityDialog(scaffoldContext),
+                                      tooltip: 'Lọc tiện ích',
+                                    ),
+                                    if (_selectedUtilityArea != null)
+                                      Positioned(
+                                        right: 8,
+                                        top: 8,
+                                        child: Container(
+                                          width: 8,
+                                          height: 8,
+                                          decoration: const BoxDecoration(
+                                            color: AppColors.success,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ]
+                          : _index == 2
+                          ? [
                               Container(
                                 margin: const EdgeInsets.all(AppSpacing.sm),
                                 decoration: BoxDecoration(
@@ -379,7 +478,8 @@ class _HomePageState extends State<HomePage> {
                                   ],
                                 ),
                               ),
-                            ],
+                            ]
+                          : null,
                     ),
                   ),
                 ),
@@ -485,6 +585,15 @@ class _HomePageState extends State<HomePage> {
                     DevicePageWrapper(
                       onRefreshCallback: (callback) => _refreshDevicePage = callback,
                     ),
+                    UtilitiesPage(
+                      key: ValueKey(_selectedUtilityArea?.id),
+                      selectedArea: _selectedUtilityArea,
+                      onClearSelection: () {
+                        setState(() {
+                          _selectedUtilityArea = null;
+                        });
+                      },
+                    ),
                     NotificationPage(
                       key: ValueKey(_notificationFilter.hashCode),
                       filter: _notificationFilter,
@@ -500,6 +609,7 @@ class _HomePageState extends State<HomePage> {
                   },
                   items: const [
                     BottomNavigationBarItem(icon: Icon(Icons.camera), label: 'Camera'),
+                    BottomNavigationBarItem(icon: Icon(Icons.apps), label: 'Tiện ích'),
                     BottomNavigationBarItem(icon: Icon(Icons.notifications), label: 'Thông Báo'),
                   ],
                 ),
@@ -713,58 +823,188 @@ class _FilterDialogContentState extends State<_FilterDialogContent> {
                   },
                   child: Column(
                     children: [
-                      _buildFilterOption(
-                        title: 'Hôm nay',
-                        selected: _localFilter.timeRange == 'today',
-                        onTap: () {
-                          setState(() {
-                            _localFilter = _localFilter.copyWith(
-                              timeRange: 'today',
-                              startDate: DateTime.now(),
-                              endDate: DateTime.now(),
-                            );
-                          });
+                      // From Date
+                      InkWell(
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: _localFilter.startDate ?? DateTime.now(),
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime.now(),
+                            builder: (context, child) {
+                              return Theme(
+                                data: ThemeData.light().copyWith(
+                                  colorScheme: ColorScheme.light(
+                                    primary: AppColors.info,
+                                    onPrimary: AppColors.textOnPrimary,
+                                    surface: AppColors.surface,
+                                    onSurface: AppColors.textPrimary,
+                                  ),
+                                  dialogTheme: DialogThemeData(backgroundColor: AppColors.surface),
+                                ),
+                                child: child!,
+                              );
+                            },
+                          );
+                          if (picked != null) {
+                            setState(() {
+                              _localFilter = _localFilter.copyWith(
+                                startDate: picked,
+                                timeRange: 'custom',
+                              );
+                            });
+                          }
                         },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.md,
+                            vertical: AppSpacing.sm,
+                          ),
+                          margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+                          decoration: BoxDecoration(
+                            color: _localFilter.startDate != null
+                                ? AppColors.info.withOpacity(0.1)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(AppBorderRadius.small),
+                            border: Border.all(
+                              color: _localFilter.startDate != null
+                                  ? AppColors.info
+                                  : AppColors.border,
+                              width: _localFilter.startDate != null ? 1.5 : 0.5,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.date_range,
+                                size: 18,
+                                color: _localFilter.startDate != null
+                                    ? AppColors.info
+                                    : AppColors.textSecondary,
+                              ),
+                              const SizedBox(width: AppSpacing.sm),
+                              Expanded(
+                                child: Text(
+                                  _localFilter.startDate != null
+                                      ? 'Từ ngày: ${_localFilter.startDate!.day}/${_localFilter.startDate!.month}/${_localFilter.startDate!.year}'
+                                      : 'Chọn từ ngày',
+                                  style: AppTextStyles.bodyMedium.copyWith(
+                                    color: _localFilter.startDate != null
+                                        ? AppColors.info
+                                        : AppColors.textSecondary,
+                                    fontWeight: _localFilter.startDate != null
+                                        ? FontWeight.w600
+                                        : FontWeight.normal,
+                                  ),
+                                ),
+                              ),
+                              if (_localFilter.startDate != null)
+                                GestureDetector(
+                                  onTap: () {
+                                    setState(() {
+                                      _localFilter = _localFilter.copyWith(
+                                        startDate: null,
+                                        clearTimeRange: true,
+                                      );
+                                    });
+                                  },
+                                  child: Icon(Icons.clear, size: 18, color: AppColors.info),
+                                ),
+                            ],
+                          ),
+                        ),
                       ),
-                      _buildFilterOption(
-                        title: '3 ngày qua',
-                        selected: _localFilter.timeRange == '3days',
-                        onTap: () {
-                          setState(() {
-                            _localFilter = _localFilter.copyWith(
-                              timeRange: '3days',
-                              startDate: DateTime.now().subtract(const Duration(days: 3)),
-                              endDate: DateTime.now(),
-                            );
-                          });
+                      // To Date
+                      InkWell(
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: _localFilter.endDate ?? DateTime.now(),
+                            firstDate: _localFilter.startDate ?? DateTime(2020),
+                            lastDate: DateTime.now(),
+                            builder: (context, child) {
+                              return Theme(
+                                data: ThemeData.light().copyWith(
+                                  colorScheme: ColorScheme.light(
+                                    primary: AppColors.info,
+                                    onPrimary: AppColors.textOnPrimary,
+                                    surface: AppColors.surface,
+                                    onSurface: AppColors.textPrimary,
+                                  ),
+                                  dialogTheme: DialogThemeData(backgroundColor: AppColors.surface),
+                                ),
+                                child: child!,
+                              );
+                            },
+                          );
+                          if (picked != null) {
+                            setState(() {
+                              _localFilter = _localFilter.copyWith(
+                                endDate: picked,
+                                timeRange: 'custom',
+                              );
+                            });
+                          }
                         },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.md,
+                            vertical: AppSpacing.sm,
+                          ),
+                          margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+                          decoration: BoxDecoration(
+                            color: _localFilter.endDate != null
+                                ? AppColors.info.withOpacity(0.1)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(AppBorderRadius.small),
+                            border: Border.all(
+                              color: _localFilter.endDate != null
+                                  ? AppColors.info
+                                  : AppColors.border,
+                              width: _localFilter.endDate != null ? 1.5 : 0.5,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.date_range,
+                                size: 18,
+                                color: _localFilter.endDate != null
+                                    ? AppColors.info
+                                    : AppColors.textSecondary,
+                              ),
+                              const SizedBox(width: AppSpacing.sm),
+                              Expanded(
+                                child: Text(
+                                  _localFilter.endDate != null
+                                      ? 'Đến ngày: ${_localFilter.endDate!.day}/${_localFilter.endDate!.month}/${_localFilter.endDate!.year}'
+                                      : 'Chọn đến ngày',
+                                  style: AppTextStyles.bodyMedium.copyWith(
+                                    color: _localFilter.endDate != null
+                                        ? AppColors.info
+                                        : AppColors.textSecondary,
+                                    fontWeight: _localFilter.endDate != null
+                                        ? FontWeight.w600
+                                        : FontWeight.normal,
+                                  ),
+                                ),
+                              ),
+                              if (_localFilter.endDate != null)
+                                GestureDetector(
+                                  onTap: () {
+                                    setState(() {
+                                      _localFilter = _localFilter.copyWith(
+                                        endDate: null,
+                                        clearTimeRange: true,
+                                      );
+                                    });
+                                  },
+                                  child: Icon(Icons.clear, size: 18, color: AppColors.info),
+                                ),
+                            ],
+                          ),
+                        ),
                       ),
-                      _buildFilterOption(
-                        title: '7 ngày qua',
-                        selected: _localFilter.timeRange == '7days',
-                        onTap: () {
-                          setState(() {
-                            _localFilter = _localFilter.copyWith(
-                              timeRange: '7days',
-                              startDate: DateTime.now().subtract(const Duration(days: 7)),
-                              endDate: DateTime.now(),
-                            );
-                          });
-                        },
-                      ),
-                      // _buildFilterOption(
-                      //   title: '30 ngày qua',
-                      //   selected: _localFilter.timeRange == '30days',
-                      //   onTap: () {
-                      //     setState(() {
-                      //       _localFilter = _localFilter.copyWith(
-                      //         timeRange: '30days',
-                      //         startDate: DateTime.now().subtract(const Duration(days: 30)),
-                      //         endDate: DateTime.now(),
-                      //       );
-                      //     });
-                      //   },
-                      // ),
                     ],
                   ),
                 ),
@@ -1036,6 +1276,143 @@ class _FilterDialogContentState extends State<_FilterDialogContent> {
               const SizedBox(width: AppSpacing.xs),
               const Icon(Icons.check_circle, size: 18, color: AppColors.info),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Utility Selection Dialog Widget - Only diagrams
+class _UtilitySelectionDialog extends StatelessWidget {
+  final BuildContext mainContext;
+  final Function(AreaMapItem) onAreaSelected;
+
+  const _UtilitySelectionDialog({required this.mainContext, required this.onAreaSelected});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Header
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: AppColors.secondary.withOpacity(0.08),
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(AppBorderRadius.medium),
+              topRight: Radius.circular(AppBorderRadius.medium),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.account_tree, size: 20, color: AppColors.secondary),
+              const SizedBox(width: AppSpacing.xs),
+              Text(
+                'Chọn sơ đồ 1 sợi',
+                style: AppTextStyles.headline3.copyWith(color: AppColors.secondary),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+
+        // Scrollable content
+        Flexible(
+          child: SingleChildScrollView(
+            child: BlocBuilder<AreaMapBloc, AreaMapState>(
+              bloc: mainContext.read<AreaMapBloc>(),
+              builder: (context, state) {
+                if (state is AreaMapLoaded) {
+                  final diagramAreas = state.data.areas.where((area) => area.isPicture).toList();
+
+                  if (diagramAreas.isEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.all(AppSpacing.lg),
+                      child: Text(
+                        'Chưa có sơ đồ 1 sợi nào',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.textSecondary,
+                          fontStyle: FontStyle.italic,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    );
+                  }
+
+                  return ListView.separated(
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    itemCount: diagramAreas.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
+                    itemBuilder: (context, index) {
+                      final area = diagramAreas[index];
+                      return _buildAreaOption(area);
+                    },
+                  );
+                } else {
+                  return Padding(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    child: Center(child: CircularProgressIndicator(color: AppColors.secondary)),
+                  );
+                }
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAreaOption(AreaMapItem area) {
+    return InkWell(
+      onTap: () => onAreaSelected(area),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppBorderRadius.small),
+          border: Border.all(color: AppColors.border, width: 0.5),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.sm),
+              decoration: BoxDecoration(
+                color: AppColors.secondary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(AppBorderRadius.small),
+              ),
+              child: Icon(Icons.image, size: 20, color: AppColors.secondary),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    area.name,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (area.levelName != null && area.levelName!.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        area.levelName!,
+                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, size: 20, color: AppColors.secondary),
           ],
         ),
       ),
