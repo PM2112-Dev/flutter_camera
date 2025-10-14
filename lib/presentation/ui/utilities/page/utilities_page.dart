@@ -455,9 +455,16 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
       );
     }
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: SingleChildScrollView(child: _buildNestedHeaderTable(tableData)),
+    return InteractiveViewer(
+      minScale: 0.5,
+      maxScale: 3.0,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.vertical,
+          child: _buildNestedHeaderTable(tableData),
+        ),
+      ),
     );
   }
 
