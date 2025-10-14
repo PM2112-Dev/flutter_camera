@@ -68,6 +68,52 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     _firebaseMessagingService.initialize();
     _cameraSelectionProvider = CameraSelectionProvider();
+    _loadSavedUtilityArea();
+  }
+
+  Future<void> _loadSavedUtilityArea() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedAreaId = prefs.getInt('selected_utility_area_id');
+      final savedAreaName = prefs.getString('selected_utility_area_name');
+
+      if (savedAreaId != null && savedAreaName != null) {
+        // Restore the saved area
+        setState(() {
+          _selectedUtilityArea = AreaMapItem(
+            id: savedAreaId,
+            name: savedAreaName,
+            levelName: prefs.getString('selected_utility_area_level_name'),
+            mapType: prefs.getString('selected_utility_area_map_type') ?? 'picture',
+            photoPath: prefs.getString('selected_utility_area_photo_path'),
+            children: [],
+          );
+        });
+        print('✅ Restored saved utility area: $savedAreaName (ID: $savedAreaId)');
+      }
+    } catch (e) {
+      print('⚠️ Error loading saved utility area: $e');
+    }
+  }
+
+  Future<void> _saveUtilityArea(AreaMapItem area) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('selected_utility_area_id', area.id);
+      await prefs.setString('selected_utility_area_name', area.name);
+      if (area.levelName != null) {
+        await prefs.setString('selected_utility_area_level_name', area.levelName!);
+      }
+      if (area.mapType != null) {
+        await prefs.setString('selected_utility_area_map_type', area.mapType!);
+      }
+      if (area.photoPath != null) {
+        await prefs.setString('selected_utility_area_photo_path', area.photoPath!);
+      }
+      print('💾 Saved utility area: ${area.name} (ID: ${area.id})');
+    } catch (e) {
+      print('⚠️ Error saving utility area: $e');
+    }
   }
 
   Future<String> _getUserName(AuthLocalPreference authPreference) async {
@@ -234,6 +280,7 @@ class _HomePageState extends State<HomePage> {
                       setState(() {
                         _selectedUtilityArea = area;
                       });
+                      _saveUtilityArea(area); // Save selected area
                       Navigator.pop(dialogContext);
                     },
                   ),
@@ -371,7 +418,7 @@ class _HomePageState extends State<HomePage> {
                         _index == 0
                             ? 'Camera'
                             : _index == 1
-                            ? 'Tiện ích'
+                            ? 'Biểu đồ'
                             : 'Thông Báo',
                         style: AppTextStyles.headline3.copyWith(
                           color: AppColors.textOnPrimary,
@@ -540,20 +587,20 @@ class _HomePageState extends State<HomePage> {
                           ],
                         ),
                       ),
-                      ListTile(
-                        leading: const Icon(Icons.notifications_active, color: AppColors.primary),
-                        title: Text('Quản lý thông báo', style: AppTextStyles.bodyLarge),
-                        onTap: () {
-                          Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const NotificationManagementPage(),
-                            ),
-                          );
-                        },
-                      ),
-                      const Divider(),
+                      // ListTile(
+                      //   leading: const Icon(Icons.notifications_active, color: AppColors.primary),
+                      //   title: Text('Quản lý thông báo', style: AppTextStyles.bodyLarge),
+                      //   onTap: () {
+                      //     Navigator.pop(context);
+                      //     Navigator.push(
+                      //       context,
+                      //       MaterialPageRoute(
+                      //         builder: (context) => const NotificationManagementPage(),
+                      //       ),
+                      //     );
+                      //   },
+                      // ),
+                      // const Divider(),
                       ListTile(
                         leading: const Icon(Icons.settings, color: AppColors.primary),
                         title: Text('Cài đặt', style: AppTextStyles.bodyLarge),
@@ -600,18 +647,29 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ],
                 ),
-                bottomNavigationBar: BottomNavigationBar(
-                  currentIndex: _index,
-                  onTap: (int index) {
-                    setState(() {
-                      _index = index;
-                    });
+                bottomNavigationBar: OrientationBuilder(
+                  builder: (context, orientation) {
+                    // Hide bottom navigation bar in landscape mode when on utilities page
+                    if (_index == 1 && orientation == Orientation.landscape) {
+                      return const SizedBox.shrink();
+                    }
+                    return BottomNavigationBar(
+                      currentIndex: _index,
+                      onTap: (int index) {
+                        setState(() {
+                          _index = index;
+                        });
+                      },
+                      items: const [
+                        BottomNavigationBarItem(icon: Icon(Icons.camera), label: 'Camera'),
+                        BottomNavigationBarItem(icon: Icon(Icons.analytics), label: 'Biểu đồ'),
+                        BottomNavigationBarItem(
+                          icon: Icon(Icons.notifications),
+                          label: 'Thông Báo',
+                        ),
+                      ],
+                    );
                   },
-                  items: const [
-                    BottomNavigationBarItem(icon: Icon(Icons.camera), label: 'Camera'),
-                    BottomNavigationBarItem(icon: Icon(Icons.apps), label: 'Tiện ích'),
-                    BottomNavigationBarItem(icon: Icon(Icons.notifications), label: 'Thông Báo'),
-                  ],
                 ),
               ),
             ),
@@ -1307,10 +1365,10 @@ class _UtilitySelectionDialog extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(Icons.account_tree, size: 20, color: AppColors.secondary),
+              Icon(Icons.analytics, size: 20, color: AppColors.secondary),
               const SizedBox(width: AppSpacing.xs),
               Text(
-                'Chọn sơ đồ 1 sợi',
+                'Chọn biểu đồ',
                 style: AppTextStyles.headline3.copyWith(color: AppColors.secondary),
               ),
             ],
@@ -1331,7 +1389,7 @@ class _UtilitySelectionDialog extends StatelessWidget {
                     return Padding(
                       padding: const EdgeInsets.all(AppSpacing.lg),
                       child: Text(
-                        'Chưa có sơ đồ 1 sợi nào',
+                        'Chưa có biểu đồ nào',
                         style: AppTextStyles.bodyMedium.copyWith(
                           color: AppColors.textSecondary,
                           fontStyle: FontStyle.italic,
@@ -1383,7 +1441,7 @@ class _UtilitySelectionDialog extends StatelessWidget {
                 color: AppColors.secondary.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(AppBorderRadius.small),
               ),
-              child: Icon(Icons.image, size: 20, color: AppColors.secondary),
+              child: Icon(Icons.analytics, size: 20, color: AppColors.secondary),
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
@@ -1399,16 +1457,16 @@ class _UtilitySelectionDialog extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  if (area.levelName != null && area.levelName!.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        area.levelName!,
-                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
+                  // if (area.levelName != null && area.levelName!.isNotEmpty)
+                  //   Padding(
+                  //     padding: const EdgeInsets.only(top: 4),
+                  //     child: Text(
+                  //       area.levelName!,
+                  //       style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                  //       maxLines: 1,
+                  //       overflow: TextOverflow.ellipsis,
+                  //     ),
+                  //   ),
                 ],
               ),
             ),

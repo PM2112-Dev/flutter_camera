@@ -2,6 +2,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_camera/data/services/common_enums_service.dart';
 import 'package:flutter_camera/di/injection.dart';
 import 'package:flutter_camera/firebase_options.dart';
 import 'package:flutter_camera/presentation/bloc/auth/auth_bloc.dart';
@@ -18,7 +19,7 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+  // await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
   // Initialize Firebase only if not already initialized
   try {
@@ -31,7 +32,22 @@ void main() async {
   }
 
   await configureDependencies();
+
+  // Pre-load common enums for better UX
+  _preloadCommonEnums();
+
   runApp(MyApp());
+}
+
+void _preloadCommonEnums() async {
+  try {
+    final enumsService = getIt<CommonEnumsService>();
+    await enumsService.getAllEnums();
+    print('✅ Common enums pre-loaded successfully');
+  } catch (e) {
+    print('⚠️ Failed to pre-load common enums: $e');
+    // Continue anyway, will load when needed
+  }
 }
 
 class MyApp extends StatelessWidget {

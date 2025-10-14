@@ -1,17 +1,54 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_camera/di/injection.dart';
-import 'package:flutter_camera/presentation/bloc/area_map/area_map_bloc.dart';
-import 'package:flutter_camera/presentation/bloc/area_map/area_map_event.dart';
-import 'package:flutter_camera/presentation/bloc/area_map/area_map_state.dart';
 import 'package:flutter_camera/presentation/bloc/area_devices/area_devices_bloc.dart';
 import 'package:flutter_camera/presentation/bloc/area_devices/area_devices_event.dart';
 import 'package:flutter_camera/presentation/bloc/area_devices/area_devices_state.dart';
+import 'package:flutter_camera/presentation/bloc/real_time_thermal/real_time_thermal_bloc.dart';
+import 'package:flutter_camera/presentation/bloc/real_time_thermal/real_time_thermal_event.dart';
+import 'package:flutter_camera/presentation/bloc/real_time_thermal/real_time_thermal_state.dart';
 import 'package:flutter_camera/presentation/ui/shared/design_system.dart';
 import 'package:flutter_camera/domain/model/area_map.dart';
 import 'package:flutter_camera/domain/model/area_devices.dart';
-import 'package:flutter_svg/flutter_svg.dart';
-import 'package:dio/dio.dart';
+import 'package:flutter_camera/domain/model/real_time_thermal_data.dart';
+import 'package:flutter_camera/data/services/common_enums_service.dart';
+import 'package:flutter_camera/data/network/model/common_enums_model.dart';
+
+// Temperature Stats Filter Model
+class TemperatureStatsFilter {
+  final List<String>? deviceNames; // Multiple device selection
+  final int? evaluationId;
+  final String? sortBy;
+  final bool sortDescending;
+
+  const TemperatureStatsFilter({
+    this.deviceNames,
+    this.evaluationId,
+    this.sortBy,
+    this.sortDescending = true,
+  });
+
+  bool get hasActiveFilters =>
+      (deviceNames != null && deviceNames!.isNotEmpty) || evaluationId != null || sortBy != null;
+
+  TemperatureStatsFilter copyWith({
+    List<String>? deviceNames,
+    int? evaluationId,
+    String? sortBy,
+    bool? sortDescending,
+    bool clearDevices = false,
+    bool clearEvaluation = false,
+    bool clearSort = false,
+  }) {
+    return TemperatureStatsFilter(
+      deviceNames: clearDevices ? null : (deviceNames ?? this.deviceNames),
+      evaluationId: clearEvaluation ? null : (evaluationId ?? this.evaluationId),
+      sortBy: clearSort ? null : (sortBy ?? this.sortBy),
+      sortDescending: sortDescending ?? this.sortDescending,
+    );
+  }
+}
 
 class UtilitiesPage extends StatefulWidget {
   final AreaMapItem? selectedArea;
@@ -24,166 +61,284 @@ class UtilitiesPage extends StatefulWidget {
 }
 
 class _UtilitiesPageState extends State<UtilitiesPage> {
-  AreaMapItem? _localSelectedArea;
-
-  @override
-  void initState() {
-    super.initState();
-    _localSelectedArea = widget.selectedArea;
-  }
-
-  @override
-  void didUpdateWidget(UtilitiesPage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.selectedArea != oldWidget.selectedArea) {
-      setState(() {
-        _localSelectedArea = widget.selectedArea;
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (_localSelectedArea == null) {
-      return BlocProvider(
-        create: (context) => getIt<AreaMapBloc>()..add(const FetchAreaMapData()),
-        child: _DiagramListView(
-          onAreaSelected: (area) {
-            setState(() {
-              _localSelectedArea = area;
-            });
-          },
-        ),
-      );
-    } else {
+    // If an area is selected, show the temperature stats
+    if (widget.selectedArea != null) {
       return BlocProvider<AreaDevicesBloc>(
         create: (context) =>
-            getIt<AreaDevicesBloc>()..add(FetchAreaDevices(areaId: _localSelectedArea!.id)),
-        child: _DiagramDetailView(
-          area: _localSelectedArea!,
-          onBack: () {
-            setState(() {
-              _localSelectedArea = null;
-            });
-            widget.onClearSelection();
-          },
-        ),
+            getIt<AreaDevicesBloc>()..add(FetchAreaDevices(areaId: widget.selectedArea!.id)),
+        child: _TemperatureStatsView(area: widget.selectedArea!),
       );
     }
+
+    // Otherwise, show empty state prompting to select an area
+    return _EmptyStateView();
   }
 }
 
-// Diagram List View - Shows all diagrams
-class _DiagramListView extends StatelessWidget {
-  final Function(AreaMapItem) onAreaSelected;
+// Empty State View - Shown when no area is selected
+class _EmptyStateView extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: AppWidgets.buildEmptyState(
+        icon: Icons.analytics_outlined,
+        title: 'Bảng thống kê nhiệt độ',
+        subtitle: 'Nhấn nút ở góc trên bên phải để chọn khu vực',
+      ),
+    );
+  }
+}
 
-  const _DiagramListView({required this.onAreaSelected});
+// Temperature Stats View - Shows temperature statistics table for selected area
+class _TemperatureStatsView extends StatefulWidget {
+  final AreaMapItem area;
+
+  const _TemperatureStatsView({required this.area});
+
+  @override
+  State<_TemperatureStatsView> createState() => _TemperatureStatsViewState();
+}
+
+class _TemperatureStatsViewState extends State<_TemperatureStatsView> {
+  TemperatureStatsFilter _filter = const TemperatureStatsFilter();
+  final GlobalKey _filterButtonKey = GlobalKey();
+
+  void _showFilterDialog() {
+    final RenderBox? renderBox = _filterButtonKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+
+    final position = renderBox.localToGlobal(Offset.zero);
+    final screenHeight = MediaQuery.of(context).size.height;
+    final dialogHeight = screenHeight * 0.7;
+
+    // Get devices from AreaDevicesBloc
+    final devicesState = context.read<AreaDevicesBloc>().state;
+    List<DeviceItem> devices = [];
+    if (devicesState is AreaDevicesLoaded) {
+      devices = devicesState.devices.where((device) => device.deviceType == 'Machine').toList();
+    }
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black26,
+      builder: (BuildContext dialogContext) {
+        return Stack(
+          children: [
+            Positioned(
+              top: position.dy,
+              right: 8,
+              child: Material(
+                elevation: 8,
+                borderRadius: BorderRadius.circular(AppBorderRadius.medium),
+                child: Container(
+                  width: 320,
+                  constraints: BoxConstraints(maxHeight: dialogHeight),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(AppBorderRadius.medium),
+                    border: Border.all(color: AppColors.border, width: 0.5),
+                  ),
+                  child: _FilterDialog(
+                    filter: _filter,
+                    devices: devices,
+                    onFilterChanged: (newFilter) {
+                      setState(() {
+                        _filter = newFilter;
+                      });
+                      Navigator.pop(dialogContext);
+                    },
+                    onClearAll: () {
+                      setState(() {
+                        _filter = const TemperatureStatsFilter();
+                      });
+                      Navigator.pop(dialogContext);
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: BlocBuilder<AreaMapBloc, AreaMapState>(
-        builder: (context, state) {
-          if (state is AreaMapLoading) {
-            return AppWidgets.buildLoadingIndicator(message: 'Đang tải sơ đồ...');
-          } else if (state is AreaMapError) {
-            return _buildErrorView(context, state);
-          } else if (state is AreaMapLoaded) {
-            // Filter only Picture type (diagrams)
-            final diagramAreas = state.data.areas.where((area) => area.isPicture).toList();
+      body: OrientationBuilder(
+        builder: (context, orientation) {
+          final isLandscape = orientation == Orientation.landscape;
 
-            if (diagramAreas.isEmpty) {
-              return AppWidgets.buildEmptyState(
-                icon: Icons.image_outlined,
-                title: 'Không có sơ đồ',
-                subtitle: 'Chưa có khu vực nào có sơ đồ 1 sợi',
-              );
-            }
+          return SafeArea(
+            child: BlocBuilder<AreaDevicesBloc, AreaDevicesState>(
+              builder: (context, devicesState) {
+                if (devicesState is AreaDevicesLoading) {
+                  return AppWidgets.buildLoadingIndicator(message: 'Đang tải thiết bị...');
+                } else if (devicesState is AreaDevicesError) {
+                  return _buildErrorView(context, devicesState.message);
+                } else if (devicesState is AreaDevicesLoaded) {
+                  if (devicesState.devices.isEmpty) {
+                    return AppWidgets.buildEmptyState(
+                      icon: Icons.device_thermostat,
+                      title: 'Không có thiết bị',
+                      subtitle: 'Khu vực này chưa có thiết bị nào',
+                    );
+                  }
 
-            return RefreshIndicator(
-              onRefresh: () async {
-                context.read<AreaMapBloc>().add(const RefreshAreaMapData());
+                  return Column(
+                    children: [
+                      // Area info header - show in portrait, compact in landscape
+                      if (!isLandscape)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(AppSpacing.md),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(AppSpacing.sm),
+                                decoration: BoxDecoration(
+                                  color: AppColors.secondary.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(AppBorderRadius.small),
+                                ),
+                                child: Icon(Icons.analytics, color: AppColors.secondary, size: 24),
+                              ),
+                              const SizedBox(width: AppSpacing.md),
+                              Expanded(
+                                child: Text(
+                                  widget.area.name,
+                                  style: AppTextStyles.headline3.copyWith(
+                                    color: AppColors.textPrimary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              // Filter button
+                              Stack(
+                                children: [
+                                  IconButton(
+                                    key: _filterButtonKey,
+                                    icon: Icon(Icons.filter_list, color: AppColors.secondary),
+                                    onPressed: _showFilterDialog,
+                                    tooltip: 'Lọc dữ liệu',
+                                  ),
+                                  if (_filter.hasActiveFilters)
+                                    Positioned(
+                                      right: 8,
+                                      top: 8,
+                                      child: Container(
+                                        width: 8,
+                                        height: 8,
+                                        decoration: const BoxDecoration(
+                                          color: AppColors.info,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        // Compact header for landscape
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.md,
+                            vertical: AppSpacing.sm,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.analytics, color: AppColors.secondary, size: 20),
+                              const SizedBox(width: AppSpacing.sm),
+                              Expanded(
+                                child: Text(
+                                  widget.area.name,
+                                  style: AppTextStyles.bodyLarge.copyWith(
+                                    color: AppColors.textPrimary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              // Filter button
+                              Stack(
+                                children: [
+                                  IconButton(
+                                    key: _filterButtonKey,
+                                    icon: Icon(
+                                      Icons.filter_list,
+                                      color: AppColors.secondary,
+                                      size: 20,
+                                    ),
+                                    onPressed: _showFilterDialog,
+                                    tooltip: 'Lọc dữ liệu',
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                  ),
+                                  if (_filter.hasActiveFilters)
+                                    Positioned(
+                                      right: 6,
+                                      top: 6,
+                                      child: Container(
+                                        width: 6,
+                                        height: 6,
+                                        decoration: const BoxDecoration(
+                                          color: AppColors.info,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      // Temperature stats table
+                      Expanded(
+                        child: RefreshIndicator(
+                          onRefresh: () async {
+                            context.read<AreaDevicesBloc>().add(
+                              FetchAreaDevices(areaId: widget.area.id),
+                            );
+                          },
+                          child: _TemperatureStatsTable(
+                            devices: devicesState.devices,
+                            filter: _filter,
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                }
+                return AppWidgets.buildEmptyState(
+                  icon: Icons.analytics_outlined,
+                  title: 'Thống kê nhiệt độ',
+                  subtitle: 'Chưa có dữ liệu',
+                );
               },
-              child: ListView.separated(
-                padding: const EdgeInsets.all(AppSpacing.md),
-                itemCount: diagramAreas.length,
-                separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
-                itemBuilder: (context, index) {
-                  final area = diagramAreas[index];
-                  return _buildDiagramCard(context, area);
-                },
-              ),
-            );
-          }
-          return AppWidgets.buildEmptyState(
-            icon: Icons.account_tree,
-            title: 'Sơ đồ 1 sợi',
-            subtitle: 'Chưa có dữ liệu',
+            ),
           );
         },
       ),
     );
   }
 
-  Widget _buildDiagramCard(BuildContext context, AreaMapItem area) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppBorderRadius.medium),
-        boxShadow: AppShadows.cardShadow,
-        border: Border.all(color: AppColors.border, width: 0.5),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => onAreaSelected(area),
-          borderRadius: BorderRadius.circular(AppBorderRadius.medium),
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(AppSpacing.sm),
-                  decoration: BoxDecoration(
-                    color: AppColors.secondary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(AppBorderRadius.small),
-                  ),
-                  child: Icon(Icons.account_tree, color: AppColors.secondary, size: 28),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        area.name,
-                        style: AppTextStyles.bodyLarge.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      if (area.levelName != null && area.levelName!.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            area.levelName!,
-                            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                Icon(Icons.zoom_in, color: AppColors.secondary, size: 24),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildErrorView(BuildContext context, AreaMapError state) {
+  Widget _buildErrorView(BuildContext context, String message) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -198,7 +353,7 @@ class _DiagramListView extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
             child: Text(
-              state.message,
+              message,
               style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
               textAlign: TextAlign.center,
             ),
@@ -206,7 +361,7 @@ class _DiagramListView extends StatelessWidget {
           const SizedBox(height: AppSpacing.lg),
           ElevatedButton.icon(
             onPressed: () {
-              context.read<AreaMapBloc>().add(const FetchAreaMapData());
+              context.read<AreaDevicesBloc>().add(FetchAreaDevices(areaId: widget.area.id));
             },
             icon: const Icon(Icons.refresh),
             label: const Text('Thử lại'),
@@ -221,751 +376,1265 @@ class _DiagramListView extends StatelessWidget {
   }
 }
 
-// Diagram Detail View - Shows diagram image with zoom
-class _DiagramDetailView extends StatefulWidget {
-  final AreaMapItem area;
-  final VoidCallback onBack;
+// Temperature Statistics Table
+class _TemperatureStatsTable extends StatefulWidget {
+  final List<DeviceItem> devices;
+  final TemperatureStatsFilter filter;
 
-  const _DiagramDetailView({required this.area, required this.onBack});
+  const _TemperatureStatsTable({required this.devices, required this.filter});
 
   @override
-  State<_DiagramDetailView> createState() => _DiagramDetailViewState();
+  State<_TemperatureStatsTable> createState() => _TemperatureStatsTableState();
 }
 
-class _DiagramDetailViewState extends State<_DiagramDetailView> {
-  final TransformationController _transformationController = TransformationController();
-  final GlobalKey _imageKey = GlobalKey();
-  double _rotationAngle = 0.0; // 0, 90, 180, 270 degrees
-  Size? _imageSize; // Kích thước hiển thị
-  Size? _originalImageSize; // Kích thước gốc của ảnh
-  DeviceItem? _selectedDevice;
-  // Tap to get coordinates
-  double? _tapX;
-  double? _tapY;
+class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
+  final Map<String, RealTimeThermalBloc> _thermalBlocs = {};
 
   @override
   void initState() {
     super.initState();
-    print('📐 DiagramDetailView initialized');
-    print('   Area: ${widget.area.name}');
-    print('   PhotoPath: ${widget.area.photoPath}');
-    print('   FullURL: ${widget.area.fullPhotoUrl}');
-    print('   IsSVG: $_isSvg');
+    // Filter only Machine devices
+    final machineDevices = widget.devices
+        .where((device) => device.deviceType == 'Machine')
+        .toList();
+    print(
+      '🔥 Initializing thermal blocs for ${machineDevices.length} Machine devices (Total: ${widget.devices.length})',
+    );
 
-    // Load image dimensions để lấy kích thước gốc
-    if (!_isSvg) {
-      _loadImageDimensions();
-    } else {
-      _loadSvgDimensions();
-    }
-
-    // Listen for image size after first frame
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _updateImageSize();
-    });
-  }
-
-  Future<void> _loadImageDimensions() async {
-    try {
-      final image = NetworkImage(widget.area.fullPhotoUrl);
-      final stream = image.resolve(const ImageConfiguration());
-      stream.addListener(
-        ImageStreamListener((ImageInfo info, bool synchronousCall) {
-          if (mounted) {
-            setState(() {
-              _originalImageSize = Size(info.image.width.toDouble(), info.image.height.toDouble());
-            });
-            print('🖼️  Original image size: ${info.image.width} x ${info.image.height}');
-          }
-        }),
+    for (final device in machineDevices) {
+      print(
+        '   📡 Fetching thermal data for: ${device.name} (machineId=${device.machineId}, id=${device.id}, type=${device.deviceType})',
       );
-    } catch (e) {
-      print('❌ Error loading image dimensions: $e');
-    }
-  }
+      final bloc = getIt<RealTimeThermalBloc>()
+        ..add(
+          FetchRealTimeThermalData(
+            machineId: device.machineId,
+            id: device.id,
+            deviceType: device.deviceType,
+          ),
+        );
+      _thermalBlocs[device.key] = bloc;
 
-  Future<void> _loadSvgDimensions() async {
-    try {
-      final response = await Dio().get(widget.area.fullPhotoUrl);
-      final svgContent = response.data.toString();
-
-      // Parse viewBox="0 0 width height"
-      final viewBoxPattern = RegExp(r'viewBox="([^"]+)"');
-      final viewBoxMatch = viewBoxPattern.firstMatch(svgContent);
-
-      if (viewBoxMatch != null) {
-        final viewBoxValue = viewBoxMatch.group(1);
-        if (viewBoxValue != null) {
-          final viewBox = viewBoxValue.split(' ');
-          if (viewBox.length >= 4) {
-            final width = double.tryParse(viewBox[2]) ?? 1000;
-            final height = double.tryParse(viewBox[3]) ?? 1000;
-            if (mounted) {
-              setState(() {
-                _originalImageSize = Size(width, height);
-              });
-              print('🖼️  SVG viewBox size: $width x $height');
-            }
-            return;
-          }
-        }
-      }
-
-      // Fallback: parse width/height attributes
-      final widthPattern = RegExp(r'width="(\d+\.?\d*)"');
-      final heightPattern = RegExp(r'height="(\d+\.?\d*)"');
-      final widthMatch = widthPattern.firstMatch(svgContent);
-      final heightMatch = heightPattern.firstMatch(svgContent);
-
-      if (widthMatch != null && heightMatch != null) {
-        final width = double.tryParse(widthMatch.group(1)!) ?? 1000;
-        final height = double.tryParse(heightMatch.group(1)!) ?? 1000;
+      // Listen to bloc state changes to trigger rebuild
+      bloc.stream.listen((state) {
         if (mounted) {
-          setState(() {
-            _originalImageSize = Size(width, height);
-          });
-          print('🖼️  SVG size from attributes: $width x $height');
+          setState(() {});
         }
-      }
-    } catch (e) {
-      print('❌ Error loading SVG dimensions: $e');
+      });
     }
   }
 
   @override
   void dispose() {
-    _transformationController.dispose();
+    for (final bloc in _thermalBlocs.values) {
+      bloc.close();
+    }
     super.dispose();
   }
 
-  void _updateImageSize() {
-    final RenderBox? renderBox = _imageKey.currentContext?.findRenderObject() as RenderBox?;
-    if (renderBox != null && mounted) {
-      setState(() {
-        _imageSize = renderBox.size;
-      });
-      print('📏 Image size: ${_imageSize?.width} x ${_imageSize?.height}');
-    }
-  }
-
-  bool get _isSvg {
-    final url = widget.area.fullPhotoUrl.toLowerCase();
-    return url.endsWith('.svg');
-  }
-
-  void _rotateImage() {
-    setState(() {
-      _rotationAngle += 90;
-      if (_rotationAngle >= 360) _rotationAngle = 0;
-    });
-    print('🔄 Rotated to: $_rotationAngle degrees');
-  }
-
-  // _onDeviceTap - REMOVED
-
   @override
   Widget build(BuildContext context) {
-    if (widget.area.photoPath == null || widget.area.photoPath!.isEmpty) {
-      return Scaffold(
-        backgroundColor: AppColors.background,
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.image_not_supported, size: 80, color: AppColors.textSecondary),
-              const SizedBox(height: AppSpacing.lg),
-              Text(
-                'Không có sơ đồ',
-                style: AppTextStyles.bodyLarge.copyWith(color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                widget.area.name,
-                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
+    var tableData = _getTableData();
+
+    // Apply filters
+    tableData = _applyFilters(tableData);
+
+    if (tableData.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.filter_list_off, size: 64, color: AppColors.textSecondary),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'Không có dữ liệu phù hợp',
+              style: AppTextStyles.bodyLarge.copyWith(color: AppColors.textSecondary),
+            ),
+          ],
         ),
       );
     }
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: BlocBuilder<AreaDevicesBloc, AreaDevicesState>(
-        builder: (context, devicesState) {
-          return Stack(
-            children: [
-              // Image viewer with devices overlay
-              InteractiveViewer(
-                transformationController: _transformationController,
-                minScale: 0.1,
-                maxScale: 10.0,
-                boundaryMargin: const EdgeInsets.all(double.infinity),
-                child: Center(
-                  child: Transform.rotate(
-                    angle: _rotationAngle * 3.14159 / 180,
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        // Base image
-                        _isSvg ? _buildSvgImage() : _buildRasterImage(),
-
-                        // Devices overlay
-                        if (devicesState is AreaDevicesLoaded && devicesState.devices.isNotEmpty)
-                          _buildDevicesOverlay(devicesState.devices),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-              // Loading overlay
-              if (devicesState is AreaDevicesLoading)
-                Positioned(
-                  top: AppSpacing.md,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.lg,
-                        vertical: AppSpacing.sm,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface.withOpacity(0.9),
-                        borderRadius: BorderRadius.circular(AppBorderRadius.large),
-                        boxShadow: AppShadows.cardShadow,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: AppColors.secondary,
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.sm),
-                          Text(
-                            'Đang tải thiết bị...',
-                            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-
-              // Control buttons (floating)
-              Positioned(
-                bottom: AppSpacing.lg,
-                right: AppSpacing.md,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(AppBorderRadius.large),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.15),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Reset zoom button
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () {
-                            setState(() {
-                              _transformationController.value = Matrix4.identity();
-                            });
-                          },
-                          borderRadius: const BorderRadius.only(
-                            topLeft: Radius.circular(AppBorderRadius.large),
-                            topRight: Radius.circular(AppBorderRadius.large),
-                          ),
-                          child: Container(
-                            padding: const EdgeInsets.all(AppSpacing.md),
-                            child: Icon(Icons.fit_screen, color: AppColors.secondary, size: 24),
-                          ),
-                        ),
-                      ),
-                      Divider(height: 1, color: AppColors.border),
-                      // Rotate button
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: _rotateImage,
-                          child: Container(
-                            padding: const EdgeInsets.all(AppSpacing.md),
-                            child: Icon(Icons.rotate_right, color: AppColors.secondary, size: 24),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // Tap coordinates display
-              if (_tapX != null && _tapY != null)
-                Positioned(
-                  top: AppSpacing.lg,
-                  left: AppSpacing.md,
-                  right: AppSpacing.md,
-                  child: Container(
-                    padding: const EdgeInsets.all(AppSpacing.sm),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.8),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      'Tap: X=${_tapX!.toStringAsFixed(1)}, Y=${_tapY!.toStringAsFixed(1)} px',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          );
-        },
-      ),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: SingleChildScrollView(child: _buildNestedHeaderTable(tableData)),
     );
   }
 
-  Widget _buildDevicesOverlay(List<DeviceItem> devices) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Lấy kích thước image hiển thị
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && _imageKey.currentContext != null) {
-            final RenderBox? renderBox = _imageKey.currentContext!.findRenderObject() as RenderBox?;
-            if (renderBox != null) {
-              final displayedSize = renderBox.size;
-              if (_imageSize?.width != displayedSize.width ||
-                  _imageSize?.height != displayedSize.height) {
-                setState(() {
-                  _imageSize = displayedSize;
-                });
-              }
-            }
-          }
-        });
+  Widget _buildNestedHeaderTable(List<Map<String, dynamic>> tableData) {
+    final availableTypes = _getAvailableComparisonTypes(tableData);
 
-        // Nếu chưa có kích thước, return empty
-        if (_imageSize == null || _imageSize!.width == 0) {
-          return const SizedBox.shrink();
-        }
-
-        print('📍 Devices overlay:');
-        print(
-          '   Display size: ${_imageSize!.width.toStringAsFixed(1)} x ${_imageSize!.height.toStringAsFixed(1)}',
-        );
-        print('   Total devices: ${devices.length}');
-
-        return Stack(
-          clipBehavior: Clip.none,
-          children: devices.map((device) {
-            // Tọa độ từ API (pixel coordinates trên hình gốc)
-            final originalX = device.longitude;
-            final originalY = device.latitude;
-
-            // Sử dụng kích thước ảnh gốc đã load
-            final originalImageSize = _originalImageSize ?? const Size(1000, 1000);
-
-            // Quy đổi từ pixel sang dp trước khi tính toán
-            final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
-            final originalDpWidth = originalImageSize.width / devicePixelRatio;
-            final originalDpHeight = originalImageSize.height / devicePixelRatio;
-
-            // BoxFit.contain giữ aspect ratio, nên cần tính scale ĐỒNG NHẤT
-            final scaleX = _imageSize!.width / originalDpWidth;
-            final scaleY = _imageSize!.height / originalDpHeight;
-            final scale = scaleX < scaleY ? scaleX : scaleY;
-
-            // Tính kích thước hình thực sự được hiển thị
-            final actualImageWidth = originalDpWidth * scale;
-            final actualImageHeight = originalDpHeight * scale;
-
-            // Tính padding (hình được center)
-            final paddingX = (_imageSize!.width - actualImageWidth) / 2;
-            final paddingY = (_imageSize!.height - actualImageHeight) / 2;
-
-            // Scale tọa độ dựa trên mode
-            double scaledX, scaledY;
-
-            // longitude = X pixel, latitude = Y pixel (trên hình gốc 4453x2888 px)
-            // Tọa độ gốc (0,0) ở góc dưới cùng bên trái hình
-            // Scale tọa độ theo tỷ lệ hình ảnh thực tế hiển thị
-            scaledX = (originalX * scale) + paddingX;
-            // Convert từ bottom-left sang top-left: Y = originalImageSize.height - originalY
-            // Sau đó scale theo tỷ lệ hình
-            scaledY = paddingY + ((originalImageSize.height - originalY) * scale);
-
-            if (devices.indexOf(device) == 0) {
-              // Log sample để debug
-              print(
-                '   Original: ${originalImageSize.width.toStringAsFixed(0)} x ${originalImageSize.height.toStringAsFixed(0)} px ${_originalImageSize == null ? "(fallback)" : "(actual)"}',
-              );
-              print(
-                '   Display container: ${_imageSize!.width.toStringAsFixed(1)} x ${_imageSize!.height.toStringAsFixed(1)} dp',
-              );
-              print('   Device pixel ratio: ${devicePixelRatio.toStringAsFixed(1)}');
-              print(
-                '   Calculated position: X=${scaledX.toStringAsFixed(1)}, Y=${scaledY.toStringAsFixed(1)}',
-              );
-            }
-            print(
-              '   📌 ${device.name}: API(${originalX.toStringAsFixed(1)}, ${originalY.toStringAsFixed(1)}) → Screen(${scaledX.toStringAsFixed(1)}, ${scaledY.toStringAsFixed(1)}) [PX→DP+SCALE+BOTTOM-LEFT]',
-            );
-
-            return Positioned(
-              left: scaledX - 16, // Center marker (32px / 2)
-              top: scaledY - 16,
-              child: GestureDetector(
-                onTap: () => _onDeviceTap(device),
-                child: _buildDeviceMarker(device),
-              ),
-            );
-          }).toList(),
-        );
-      },
-    );
-  }
-
-  Widget _buildDeviceMarker(DeviceItem device) {
-    final bool isSelected = _selectedDevice?.id == device.id;
-    final Color markerColor = device.hasCamera ? AppColors.info : AppColors.success;
-    final IconData markerIcon = device.hasCamera ? Icons.videocam : Icons.sensors;
-
-    return TweenAnimationBuilder<double>(
-      duration: const Duration(milliseconds: 300),
-      tween: Tween(begin: 0.0, end: 1.0),
-      builder: (context, value, child) {
-        return Transform.scale(
-          scale: 0.5 + (value * 0.5),
-          child: Opacity(opacity: value, child: child),
-        );
-      },
-      child: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          color: markerColor,
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: isSelected ? 2 : 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: markerColor.withOpacity(0.4),
-              blurRadius: isSelected ? 8 : 6,
-              spreadRadius: isSelected ? 1 : 0,
-            ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            Center(child: Icon(markerIcon, color: Colors.white, size: 16)),
-            // Device name badge
-            Positioned(
-              bottom: -2,
-              left: 0,
-              right: 0,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.7),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  device.name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 6,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _onImageTap(Offset localPosition) {
-    if (_originalImageSize == null) return;
-
-    // Convert tap position to original image coordinates
-    final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
-    final originalDpWidth = _originalImageSize!.width / devicePixelRatio;
-    final originalDpHeight = _originalImageSize!.height / devicePixelRatio;
-
-    // Calculate scale factor
-    final scaleX = _imageSize!.width / originalDpWidth;
-    final scaleY = _imageSize!.height / originalDpHeight;
-    final scale = scaleX < scaleY ? scaleX : scaleY;
-
-    // Calculate actual image size and padding
-    final actualImageWidth = originalDpWidth * scale;
-    final actualImageHeight = originalDpHeight * scale;
-    final paddingX = (_imageSize!.width - actualImageWidth) / 2;
-    final paddingY = (_imageSize!.height - actualImageHeight) / 2;
-
-    // Convert tap position to original image coordinates
-    final tapX = (localPosition.dx - paddingX) / scale;
-    final tapY = (localPosition.dy - paddingY) / scale;
-
-    // Convert to original pixel coordinates
-    final originalPixelX = tapX * devicePixelRatio;
-    final originalPixelY = tapY * devicePixelRatio;
-
-    setState(() {
-      _tapX = originalPixelX;
-      _tapY = originalPixelY;
-    });
-
-    print(
-      '🎯 Tap at: ${localPosition.dx.toStringAsFixed(1)}, ${localPosition.dy.toStringAsFixed(1)}',
-    );
-    print(
-      '📐 Original pixel: ${originalPixelX.toStringAsFixed(1)}, ${originalPixelY.toStringAsFixed(1)}',
-    );
-  }
-
-  void _onDeviceTap(DeviceItem device) {
-    setState(() {
-      _selectedDevice = device;
-    });
-
-    // Show device info bottom sheet
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _buildDeviceInfoSheet(device),
-    );
-  }
-
-  Widget _buildDeviceInfoSheet(DeviceItem device) {
     return Container(
-      margin: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppBorderRadius.large),
-        boxShadow: AppShadows.cardShadow,
-      ),
+      decoration: BoxDecoration(border: Border.all(color: AppColors.border, width: 0.5)),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            decoration: BoxDecoration(
-              color: device.hasCamera
-                  ? AppColors.info.withOpacity(0.1)
-                  : AppColors.success.withOpacity(0.1),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(AppBorderRadius.large),
-                topRight: Radius.circular(AppBorderRadius.large),
-              ),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(AppSpacing.sm),
-                  decoration: BoxDecoration(
-                    color: device.hasCamera ? AppColors.info : AppColors.success,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    device.hasCamera ? Icons.videocam : Icons.sensors,
-                    color: Colors.white,
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        device.name,
-                        style: AppTextStyles.headline3.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      Text(
-                        device.deviceTypeName,
-                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
-              ],
-            ),
-          ),
-
-          // Info
-          Padding(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Column(
-              children: [
-                _buildInfoRow('Mã thiết bị', device.code),
-                const Divider(height: AppSpacing.lg),
-                _buildInfoRow('ID', device.id.toString()),
-                const Divider(height: AppSpacing.lg),
-                _buildInfoRow('Machine ID', device.machineId.toString()),
-                const Divider(height: AppSpacing.lg),
-                _buildInfoRow('Loại', device.deviceType),
-                const Divider(height: AppSpacing.lg),
-                _buildInfoRow(
-                  'Tọa độ',
-                  '(${device.longitude.toStringAsFixed(1)}, ${device.latitude.toStringAsFixed(1)})',
-                ),
-                const Divider(height: AppSpacing.lg),
-                _buildInfoRow('Cấp độ', device.level),
-              ],
-            ),
-          ),
-
-          // Actions
-          Padding(
-            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Chi tiết thiết bị ${device.name}'),
-                      backgroundColor: AppColors.info,
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.info_outline),
-                label: const Text('Xem chi tiết'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: device.hasCamera ? AppColors.info : AppColors.success,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-                ),
-              ),
-            ),
-          ),
+          // Multi-level Header (2 rows)
+          _buildMultiLevelHeader(availableTypes),
+          // Data Rows
+          ...tableData.map((row) => _buildDataRow(row, availableTypes)),
         ],
       ),
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  Widget _buildMultiLevelHeader(List<Map<String, String>> availableTypes) {
+    final headerBgColor = AppColors.secondary.withOpacity(0.08);
+    const row1Height = 32.0;
+    const row2Height = 32.0;
+    const totalHeight = row1Height + row2Height;
+
+    return Column(
       children: [
-        Text(label, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
-        Text(
-          value,
-          style: AppTextStyles.bodyMedium.copyWith(
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.w600,
+        // First header row - Main columns with groups
+        Container(
+          height: row1Height,
+          color: headerBgColor,
+          child: Row(
+            children: [
+              // Điểm đo (rowspan 2)
+              _buildHeaderCellWithRowSpan('Điểm đo', width: 180, height: totalHeight),
+              // Hiện tại (rowspan 2)
+              _buildHeaderCellWithRowSpan('Hiện tại (°C)', width: 100, height: totalHeight),
+              // Max (rowspan 2)
+              _buildHeaderCellWithRowSpan('Cao nhất (°C)', width: 100, height: totalHeight),
+              // Min (rowspan 2)
+              _buildHeaderCellWithRowSpan('Thấp nhất (°C)', width: 100, height: totalHeight),
+              // AVG (rowspan 2)
+              _buildHeaderCellWithRowSpan('Trung bình (°C)', width: 100, height: totalHeight),
+              // Comparison type groups (colspan 3 each)
+              ...availableTypes.map(
+                (type) => _buildGroupHeaderCell(
+                  type['displayName'] as String,
+                  width: 350,
+                  height: row1Height,
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Second header row - Sub columns
+        Container(
+          height: row2Height,
+          color: headerBgColor,
+          child: Row(
+            children: [
+              // Empty spacers for rowspan cells (5 columns)
+              SizedBox(width: 180, height: row2Height), // Điểm đo
+              SizedBox(width: 100, height: row2Height), // Hiện tại
+              SizedBox(width: 100, height: row2Height), // Max
+              SizedBox(width: 100, height: row2Height), // Min
+              SizedBox(width: 100, height: row2Height), // AVG
+              // Sub-columns for each comparison type
+              ...availableTypes.expand(
+                (_) => [
+                  _buildSubHeaderCell('Nhiệt độ (°C)', width: 120, height: row2Height),
+                  _buildSubHeaderCell('Chênh lệch (°C)', width: 110, height: row2Height),
+                  _buildSubHeaderCell('Đánh giá', width: 120, height: row2Height),
+                ],
+              ),
+            ],
           ),
         ),
       ],
     );
   }
 
-  Widget _buildSvgImage() {
-    return GestureDetector(
-      onTapDown: (details) {
-        _onImageTap(details.localPosition);
-      },
-      child: SvgPicture.network(
-        key: _imageKey,
-        widget.area.fullPhotoUrl,
-        // Không dùng BoxFit để hình hiển thị đầy đủ kích thước gốc
-        placeholderBuilder: (context) => Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+  List<Map<String, String>> _getComparisonTypes() {
+    // Define all possible comparison types based on thresholdTypeList
+    return [
+      {'key': 'Enviroment', 'displayName': 'Môi trường'},
+      {'key': 'Threshold', 'displayName': 'Ngưỡng nhiệt'},
+      {'key': 'MinPhase', 'displayName': 'Pha min'},
+      {'key': 'TwoArea', 'displayName': 'Phần tử cùng loại'},
+      {'key': 'GlobalMinPhase', 'displayName': 'Pha min toàn trạm'},
+      {'key': 'GlobalTwoArea', 'displayName': 'Phần tử cùng loại toàn trạm'},
+    ];
+  }
+
+  List<Map<String, String>> _getAvailableComparisonTypes(List<Map<String, dynamic>> tableData) {
+    if (tableData.isEmpty) return [];
+
+    final allTypes = _getComparisonTypes();
+    final availableTypes = <Map<String, String>>[];
+
+    // Check each comparison type to see if it has data
+    for (final type in allTypes) {
+      final key = type['key']!;
+      final configKey = '${key.toLowerCase()}Config';
+
+      // Check if any row has data for this comparison type
+      final hasData = tableData.any((row) => row[configKey] != null);
+
+      if (hasData) {
+        availableTypes.add(type);
+      }
+    }
+
+    print(
+      '📊 Available comparison types: ${availableTypes.map((t) => t['displayName']).join(", ")}',
+    );
+    return availableTypes;
+  }
+
+  Widget _buildHeaderCellWithRowSpan(String text, {required double width, required double height}) {
+    return Container(
+      width: width,
+      height: height, // Total height for rowspan (2 rows combined)
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      decoration: BoxDecoration(
+        border: Border(right: BorderSide(color: AppColors.border, width: 0.5)),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        text,
+        style: AppTextStyles.bodySmall.copyWith(
+          fontWeight: FontWeight.w700,
+          color: AppColors.textPrimary,
+          fontSize: 12,
+          height: 1.0, // Giảm line height để text gọn hơn và căn giữa tốt hơn
+        ),
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
+
+  Widget _buildGroupHeaderCell(String text, {required double width, required double height}) {
+    return Container(
+      width: width,
+      height: height,
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      decoration: BoxDecoration(
+        border: Border(
+          right: BorderSide(color: AppColors.border, width: 0.5),
+          bottom: BorderSide(color: AppColors.border, width: 0.5),
+        ),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        text,
+        style: AppTextStyles.bodyMedium.copyWith(
+          fontWeight: FontWeight.w700,
+          color: AppColors.secondary,
+          fontSize: 13,
+        ),
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
+
+  Widget _buildSubHeaderCell(String text, {required double width, required double height}) {
+    return Container(
+      width: width,
+      height: height,
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      decoration: BoxDecoration(
+        border: Border(right: BorderSide(color: AppColors.border, width: 0.5)),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        text,
+        style: AppTextStyles.bodySmall.copyWith(
+          fontWeight: FontWeight.w600,
+          color: AppColors.textPrimary,
+          fontSize: 11,
+        ),
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
+
+  Widget _buildDataRow(Map<String, dynamic> row, List<Map<String, String>> availableTypes) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
+      ),
+      child: Row(
+        children: [
+          // Điểm đo
+          SizedBox(
+            width: 180,
+            height: 52,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                border: Border(right: BorderSide(color: AppColors.border, width: 0.5)),
+              ),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      row['pointName'] ?? '',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                        fontSize: 13,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      row['deviceName'] ?? '',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                        fontSize: 11,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // Hiện tại
+          _buildDataCell(
+            child: Text(
+              row['current'] ?? '-',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: row['currentColor'] ?? AppColors.textPrimary,
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            width: 100,
+          ),
+          // Max
+          _buildDataCell(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Icon(Icons.trending_up, size: 14, color: Colors.red),
+                const SizedBox(width: 3),
+                Text(
+                  row['max'] ?? '-',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: Colors.red,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+            width: 100,
+          ),
+          // Min
+          _buildDataCell(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Icon(Icons.trending_down, size: 14, color: Colors.blue),
+                const SizedBox(width: 3),
+                Text(
+                  row['min'] ?? '-',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: Colors.blue,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+            width: 100,
+          ),
+          // AVG
+          _buildDataCell(
+            child: Text(
+              row['avg'] ?? '-',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            width: 100,
+          ),
+          // Dynamic comparison type columns
+          ...availableTypes.expand((type) {
+            final key = type['key']!;
+            final tempKey = '${key.toLowerCase()}Temp';
+            final deltaKey = '${key.toLowerCase()}Delta';
+            final evalKey = '${key.toLowerCase()}Eval';
+            final configKey = '${key.toLowerCase()}Config';
+
+            return [
+              // Nhiệt độ
+              _buildDataCell(
+                child: Text(
+                  row[tempKey] ?? '-',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                width: 120,
+              ),
+              // Chênh lệch
+              _buildDataCell(child: _buildDeltaCellContent(row[deltaKey]), width: 110),
+              // Đánh giá
+              _buildDataCell(
+                child: _buildEvaluationCellContent(row[evalKey], row[configKey]),
+                width: 120,
+              ),
+            ];
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDataCell({required Widget child, required double width}) {
+    return SizedBox(
+      width: width,
+      height: 52, // Fixed height
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+        decoration: BoxDecoration(
+          border: Border(right: BorderSide(color: AppColors.border, width: 0.5)),
+        ),
+        child: Center(child: child),
+      ),
+    );
+  }
+
+  Widget _buildDeltaCellContent(String? delta) {
+    if (delta == null) {
+      return Text(
+        '-',
+        style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary, fontSize: 12),
+      );
+    }
+
+    final deltaValue = double.tryParse(delta) ?? 0;
+    final isPositive = deltaValue > 0;
+    final color = isPositive ? Colors.red : Colors.blue;
+
+    return Text(
+      '${isPositive ? '+' : ''}$delta',
+      style: AppTextStyles.bodySmall.copyWith(
+        color: color,
+        fontWeight: FontWeight.w600,
+        fontSize: 12,
+      ),
+      textAlign: TextAlign.center,
+    );
+  }
+
+  Widget _buildEvaluationCellContent(String? text, Map<String, dynamic>? config) {
+    if (text == null || config == null) {
+      return Text(
+        '-',
+        style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary, fontSize: 12),
+        textAlign: TextAlign.center,
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(color: config['bgColor'], borderRadius: BorderRadius.circular(4)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Icon(config['icon'], size: 11, color: config['color']),
+          const SizedBox(width: 3),
+          Text(
+            text,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: config['color'],
+              fontWeight: FontWeight.w600,
+              fontSize: 10,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Map<String, dynamic>> _getTableData() {
+    final List<Map<String, dynamic>> data = [];
+    final comparisonTypes = _getComparisonTypes();
+
+    for (final device in widget.devices) {
+      if (device.deviceType != 'Machine') continue;
+
+      final bloc = _thermalBlocs[device.key];
+      if (bloc == null) continue;
+
+      final state = bloc.state;
+      if (state is RealTimeThermalLoaded) {
+        final componentKeys = state.data.data.keys.toList()..sort();
+
+        for (final componentKey in componentKeys) {
+          final componentData = state.data.data[componentKey]?.firstOrNull;
+          if (componentData == null) continue;
+
+          final status = _getStatusFromData(componentData);
+
+          // Build row data with basic info
+          final rowData = <String, dynamic>{
+            'pointName': componentData.monitorPointCode,
+            'deviceName': device.name,
+            'current': componentData.temperature.toStringAsFixed(1),
+            'currentColor': _getStatusColor(status),
+            'max': componentData.maxTemperature.toStringAsFixed(1),
+            'min': componentData.minTemperature.toStringAsFixed(1),
+            'avg': componentData.aveTemperature.toStringAsFixed(1),
+          };
+
+          // Get comparison data for all types dynamically
+          for (final type in comparisonTypes) {
+            final key = type['key']!;
+            final result = componentData.dicThermalDataResults[key];
+
+            if (result != null) {
+              final lowerKey = key.toLowerCase();
+              rowData['${lowerKey}Temp'] = result.compareValue.toStringAsFixed(1);
+              rowData['${lowerKey}Delta'] = result.deltaValue.toStringAsFixed(1);
+              rowData['${lowerKey}Eval'] = result.compareResultObject.name;
+              rowData['${lowerKey}Config'] = _getEvaluationConfig(result.compareResultObject.id);
+            } else {
+              // No data for this comparison type
+              final lowerKey = key.toLowerCase();
+              rowData['${lowerKey}Temp'] = null;
+              rowData['${lowerKey}Delta'] = null;
+              rowData['${lowerKey}Eval'] = null;
+              rowData['${lowerKey}Config'] = null;
+            }
+          }
+
+          data.add(rowData);
+        }
+      }
+    }
+
+    return data;
+  }
+
+  Map<String, dynamic> _getEvaluationConfig(int id) {
+    // Map evaluation IDs to colors and icons
+    // 1 = Tốt, 2 = Khá, 3 = Trung bình, 4 = Xấu
+    switch (id) {
+      case 1: // Tốt
+        return {'color': Colors.green, 'icon': Icons.check_circle, 'bgColor': Colors.green.shade50};
+      case 2: // Khá
+        return {
+          'color': Colors.lightGreen,
+          'icon': Icons.check_circle_outline,
+          'bgColor': Colors.lightGreen.shade50,
+        };
+      case 3: // Trung bình
+        return {
+          'color': Colors.orange,
+          'icon': Icons.warning_amber,
+          'bgColor': Colors.orange.shade50,
+        };
+      case 4: // Xấu
+        return {'color': Colors.red, 'icon': Icons.warning, 'bgColor': Colors.red.shade50};
+      default: // Không xác định
+        return {'color': Colors.grey, 'icon': Icons.info_outline, 'bgColor': Colors.grey.shade100};
+    }
+  }
+
+  ThermalStatus _getStatusFromData(ThermalDataItem data) {
+    // Determine status based on comparison results
+    final envResult = data.dicThermalDataResults['Enviroment'];
+    if (envResult != null) {
+      final id = envResult.compareResultObject.id;
+      if (id == 4) return ThermalStatus.critical;
+      if (id == 3) return ThermalStatus.warning;
+    }
+    return ThermalStatus.normal;
+  }
+
+  Color _getStatusColor(ThermalStatus status) {
+    switch (status) {
+      case ThermalStatus.critical:
+        return Colors.red;
+      case ThermalStatus.warning:
+        return Colors.orange;
+      default:
+        return Colors.green;
+    }
+  }
+
+  List<Map<String, dynamic>> _applyFilters(List<Map<String, dynamic>> data) {
+    var filteredData = data;
+
+    // Filter by device names (multiple selection)
+    if (widget.filter.deviceNames != null && widget.filter.deviceNames!.isNotEmpty) {
+      filteredData = filteredData.where((row) {
+        final deviceName = row['deviceName'] as String?;
+        return deviceName != null && widget.filter.deviceNames!.contains(deviceName);
+      }).toList();
+    }
+
+    // Filter by evaluation (check all comparison types)
+    if (widget.filter.evaluationId != null) {
+      final comparisonTypes = _getComparisonTypes();
+
+      Color? targetColor;
+      switch (widget.filter.evaluationId!) {
+        case 1: // Tốt
+          targetColor = Colors.green;
+          break;
+        case 2: // Khá
+          targetColor = Colors.lightGreen;
+          break;
+        case 3: // Trung bình
+          targetColor = Colors.orange;
+          break;
+        case 4: // Xấu
+          targetColor = Colors.red;
+          break;
+      }
+
+      filteredData = filteredData.where((row) {
+        bool matchesEvaluation = false;
+
+        for (final type in comparisonTypes) {
+          final key = type['key']!;
+          final configKey = '${key.toLowerCase()}Config';
+          final config = row[configKey] as Map<String, dynamic>?;
+
+          if (config != null && config['color'] == targetColor) {
+            matchesEvaluation = true;
+            break;
+          }
+        }
+
+        return matchesEvaluation;
+      }).toList();
+    }
+
+    // Sort data
+    if (widget.filter.sortBy != null) {
+      filteredData.sort((a, b) {
+        final sortKey = widget.filter.sortBy!;
+        final aValue = _getNumericValue(a[sortKey]);
+        final bValue = _getNumericValue(b[sortKey]);
+
+        if (widget.filter.sortDescending) {
+          return bValue.compareTo(aValue); // Cao đến thấp
+        } else {
+          return aValue.compareTo(bValue); // Thấp đến cao
+        }
+      });
+    }
+
+    return filteredData;
+  }
+
+  double _getNumericValue(dynamic value) {
+    if (value == null) return 0;
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0;
+    return 0;
+  }
+}
+
+enum ThermalStatus { normal, warning, critical }
+
+// Filter Dialog Widget
+class _FilterDialog extends StatefulWidget {
+  final TemperatureStatsFilter filter;
+  final List<DeviceItem> devices;
+  final Function(TemperatureStatsFilter) onFilterChanged;
+  final VoidCallback onClearAll;
+
+  const _FilterDialog({
+    required this.filter,
+    required this.devices,
+    required this.onFilterChanged,
+    required this.onClearAll,
+  });
+
+  @override
+  State<_FilterDialog> createState() => _FilterDialogState();
+}
+
+class _FilterDialogState extends State<_FilterDialog> {
+  late TemperatureStatsFilter _localFilter;
+  late List<String> _selectedDevices;
+  bool _isDeviceExpanded = true;
+  bool _isSortExpanded = true;
+  List<EnumItem> _temperatureLevels = [];
+  bool _isLoadingEnums = true;
+
+  final List<Map<String, String>> _sortOptions = [
+    {'key': 'current', 'name': 'Nhiệt độ hiện tại'},
+    {'key': 'max', 'name': 'Nhiệt độ cao nhất'},
+    {'key': 'min', 'name': 'Nhiệt độ thấp nhất'},
+    {'key': 'avg', 'name': 'Nhiệt độ trung bình'},
+    {'key': 'enviromentDelta', 'name': 'Δ Môi trường'},
+    {'key': 'thresholdDelta', 'name': 'Δ Ngưỡng nhiệt'},
+    {'key': 'minphaseDelta', 'name': 'Δ Pha min'},
+    {'key': 'twoareaDelta', 'name': 'Δ Phần tử cùng loại'},
+    {'key': 'globalminphaseDelta', 'name': 'Δ Pha min toàn trạm'},
+    {'key': 'globaltwoareaDelta', 'name': 'Δ Phần tử cùng loại toàn trạm'},
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _localFilter = widget.filter;
+    _selectedDevices = List.from(_localFilter.deviceNames ?? []);
+    _loadEnums();
+  }
+
+  Future<void> _loadEnums() async {
+    try {
+      final enumsService = getIt<CommonEnumsService>();
+      final enums = await enumsService.getAllEnums();
+
+      if (mounted) {
+        setState(() {
+          _temperatureLevels = enums?.temperatureLevelList ?? _getDefaultTemperatureLevels();
+          _isLoadingEnums = false;
+        });
+      }
+    } catch (e) {
+      print('⚠️ Error loading enums, using defaults: $e');
+      if (mounted) {
+        setState(() {
+          _temperatureLevels = _getDefaultTemperatureLevels();
+          _isLoadingEnums = false;
+        });
+      }
+    }
+  }
+
+  List<EnumItem> _getDefaultTemperatureLevels() {
+    return [
+      const EnumItem(id: 1, code: 'Good', name: 'Tốt'),
+      const EnumItem(id: 2, code: 'Fair', name: 'Khá'),
+      const EnumItem(id: 3, code: 'Average', name: 'Trung bình'),
+      const EnumItem(id: 4, code: 'Bad', name: 'Xấu'),
+    ];
+  }
+
+  Color _getColorForLevel(int id) {
+    switch (id) {
+      case 1: // Good - Tốt
+        return Colors.green;
+      case 2: // Fair - Khá
+        return Colors.lightGreen;
+      case 3: // Average - Trung bình
+        return Colors.orange;
+      case 4: // Bad - Xấu
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Header
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: AppColors.info.withOpacity(0.08),
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(AppBorderRadius.medium),
+              topRight: Radius.circular(AppBorderRadius.medium),
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              CircularProgressIndicator(color: AppColors.secondary),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                'Đang tải sơ đồ ...',
-                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+              Row(
+                children: [
+                  Icon(Icons.filter_alt, size: 20, color: AppColors.info),
+                  const SizedBox(width: AppSpacing.xs),
+                  Text('Bộ lọc', style: AppTextStyles.headline3.copyWith(color: AppColors.info)),
+                ],
+              ),
+              TextButton(
+                onPressed: widget.onClearAll,
+                child: Text(
+                  'Xóa tất cả',
+                  style: AppTextStyles.bodyMedium.copyWith(color: AppColors.info),
+                ),
               ),
             ],
           ),
+        ),
+        const Divider(height: 1),
+
+        // Scrollable content
+        Flexible(
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Device Filter (Expandable)
+                  if (widget.devices.isNotEmpty) ...[
+                    InkWell(
+                      onTap: () {
+                        setState(() {
+                          _isDeviceExpanded = !_isDeviceExpanded;
+                        });
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.device_thermostat,
+                                  size: 18,
+                                  color: AppColors.textPrimary,
+                                ),
+                                const SizedBox(width: AppSpacing.xs),
+                                Text(
+                                  'Thiết bị',
+                                  style: AppTextStyles.bodyMedium.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                                if (_selectedDevices.isNotEmpty)
+                                  Container(
+                                    margin: const EdgeInsets.only(left: AppSpacing.xs),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: AppSpacing.xs,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.info,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      '${_selectedDevices.length}',
+                                      style: AppTextStyles.bodySmall.copyWith(
+                                        color: AppColors.textOnPrimary,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            Row(
+                              children: [
+                                if (_selectedDevices.isNotEmpty)
+                                  TextButton(
+                                    onPressed: () {
+                                      setState(() {
+                                        _selectedDevices.clear();
+                                      });
+                                    },
+                                    style: TextButton.styleFrom(
+                                      padding: EdgeInsets.zero,
+                                      minimumSize: const Size(0, 30),
+                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                    child: Text(
+                                      'Bỏ chọn',
+                                      style: AppTextStyles.bodySmall.copyWith(
+                                        color: AppColors.info,
+                                      ),
+                                    ),
+                                  ),
+                                AnimatedRotation(
+                                  turns: _isDeviceExpanded ? 0.5 : 0,
+                                  duration: const Duration(milliseconds: 200),
+                                  child: Icon(
+                                    Icons.keyboard_arrow_down,
+                                    size: 20,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeInOut,
+                      child: _isDeviceExpanded
+                          ? Column(
+                              children: [
+                                const SizedBox(height: AppSpacing.sm),
+                                ...widget.devices.map((device) {
+                                  final isSelected = _selectedDevices.contains(device.name);
+                                  return _buildDeviceCheckbox(
+                                    title: device.name,
+                                    selected: isSelected,
+                                    onChanged: (selected) {
+                                      setState(() {
+                                        if (selected) {
+                                          _selectedDevices.add(device.name);
+                                        } else {
+                                          _selectedDevices.remove(device.name);
+                                        }
+                                      });
+                                    },
+                                  );
+                                }),
+                              ],
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                    const Divider(height: AppSpacing.lg),
+                  ],
+
+                  // Sort Options (Expandable)
+                  InkWell(
+                    onTap: () {
+                      setState(() {
+                        _isSortExpanded = !_isSortExpanded;
+                      });
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.sort, size: 18, color: AppColors.textPrimary),
+                              const SizedBox(width: AppSpacing.xs),
+                              Text(
+                                'Sắp xếp',
+                                style: AppTextStyles.bodyMedium.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              if (_localFilter.sortBy != null)
+                                Container(
+                                  margin: const EdgeInsets.only(left: AppSpacing.xs),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: AppSpacing.xs,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.info,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Icon(
+                                    _localFilter.sortDescending
+                                        ? Icons.arrow_downward
+                                        : Icons.arrow_upward,
+                                    size: 10,
+                                    color: AppColors.textOnPrimary,
+                                  ),
+                                ),
+                            ],
+                          ),
+                          Row(
+                            children: [
+                              if (_localFilter.sortBy != null)
+                                TextButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      _localFilter = _localFilter.copyWith(clearSort: true);
+                                    });
+                                  },
+                                  style: TextButton.styleFrom(
+                                    padding: EdgeInsets.zero,
+                                    minimumSize: const Size(0, 30),
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  child: Text(
+                                    'Xóa',
+                                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.info),
+                                  ),
+                                ),
+                              AnimatedRotation(
+                                turns: _isSortExpanded ? 0.5 : 0,
+                                duration: const Duration(milliseconds: 200),
+                                child: Icon(
+                                  Icons.keyboard_arrow_down,
+                                  size: 20,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeInOut,
+                    child: _isSortExpanded
+                        ? Column(
+                            children: [
+                              const SizedBox(height: AppSpacing.sm),
+                              ..._sortOptions.map((option) {
+                                final isSelected = _localFilter.sortBy == option['key'];
+                                return _buildSortOption(
+                                  title: option['name']!,
+                                  selected: isSelected,
+                                  sortKey: option['key']!,
+                                  isDescending: isSelected ? _localFilter.sortDescending : true,
+                                  onTap: () {
+                                    setState(() {
+                                      if (isSelected) {
+                                        // Toggle sort direction
+                                        _localFilter = _localFilter.copyWith(
+                                          sortDescending: !_localFilter.sortDescending,
+                                        );
+                                      } else {
+                                        // Select new sort field
+                                        _localFilter = _localFilter.copyWith(
+                                          sortBy: option['key'],
+                                          sortDescending: true,
+                                        );
+                                      }
+                                    });
+                                  },
+                                );
+                              }),
+                            ],
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                  const Divider(height: AppSpacing.lg),
+
+                  // Evaluation Filter
+                  Text(
+                    'Đánh giá',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Lọc theo bất kỳ loại đánh giá nào',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.textSecondary,
+                      fontSize: 11,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  if (_isLoadingEnums)
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppSpacing.md),
+                        child: CircularProgressIndicator(color: AppColors.info, strokeWidth: 2),
+                      ),
+                    )
+                  else
+                    ..._temperatureLevels.map((level) {
+                      final color = _getColorForLevel(level.id);
+                      return _buildFilterOption(
+                        title: level.name,
+                        color: color,
+                        selected: _localFilter.evaluationId == level.id,
+                        onTap: () {
+                          setState(() {
+                            _localFilter = _localFilter.copyWith(
+                              evaluationId: _localFilter.evaluationId == level.id ? null : level.id,
+                              clearEvaluation: _localFilter.evaluationId == level.id,
+                            );
+                          });
+                        },
+                      );
+                    }),
+                ],
+              ),
+            ),
+          ),
+        ),
+
+        // Apply Button
+        const Divider(height: 1),
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                // Update filter with selected devices
+                final updatedFilter = _localFilter.copyWith(
+                  deviceNames: _selectedDevices.isEmpty ? null : _selectedDevices,
+                  clearDevices: _selectedDevices.isEmpty,
+                );
+                widget.onFilterChanged(updatedFilter);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.info,
+                foregroundColor: AppColors.textOnPrimary,
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppBorderRadius.small),
+                ),
+              ),
+              child: const Text('Áp dụng'),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDeviceCheckbox({
+    required String title,
+    required bool selected,
+    required Function(bool) onChanged,
+  }) {
+    return InkWell(
+      onTap: () => onChanged(!selected),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+        margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.info.withOpacity(0.05) : Colors.transparent,
+          borderRadius: BorderRadius.circular(AppBorderRadius.small),
+          border: Border.all(
+            color: selected ? AppColors.info.withOpacity(0.3) : AppColors.border,
+            width: 0.5,
+          ),
+        ),
+        child: Row(
+          children: [
+            Checkbox(
+              value: selected,
+              onChanged: (value) => onChanged(value ?? false),
+              activeColor: AppColors.info,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              visualDensity: VisualDensity.compact,
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Expanded(
+              child: Text(
+                title,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: selected ? AppColors.info : AppColors.textPrimary,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildRasterImage() {
-    return Image.network(
-      key: _imageKey,
-      widget.area.fullPhotoUrl,
-      fit: BoxFit.contain,
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) return child;
-        return Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(
-                value: loadingProgress.expectedTotalBytes != null
-                    ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                    : null,
-                color: AppColors.secondary,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                'Đang tải sơ đồ...',
-                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
-              ),
-            ],
+  Widget _buildSortOption({
+    required String title,
+    required bool selected,
+    required String sortKey,
+    required bool isDescending,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+        margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.info.withOpacity(0.05) : Colors.transparent,
+          borderRadius: BorderRadius.circular(AppBorderRadius.small),
+          border: Border.all(
+            color: selected ? AppColors.info.withOpacity(0.3) : AppColors.border,
+            width: 0.5,
           ),
-        );
-      },
-      errorBuilder: (context, error, stackTrace) {
-        return Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.image_not_supported, color: AppColors.error, size: 64),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                'Không thể tải sơ đồ',
-                style: AppTextStyles.bodyLarge.copyWith(color: AppColors.error),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-                child: Text(
-                  error.toString(),
-                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-                  textAlign: TextAlign.center,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
+        ),
+        child: Row(
+          children: [
+            Icon(
+              isDescending ? Icons.arrow_downward : Icons.arrow_upward,
+              size: 16,
+              color: selected ? AppColors.info : AppColors.textSecondary,
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Expanded(
+              child: Text(
+                title,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: selected ? AppColors.info : AppColors.textPrimary,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                  fontSize: 13,
                 ),
               ),
-            ],
+            ),
+            if (selected)
+              Text(
+                isDescending ? 'Cao → Thấp' : 'Thấp → Cao',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.info,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterOption({
+    required String title,
+    required Color color,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+        margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.info.withOpacity(0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(AppBorderRadius.small),
+          border: Border.all(
+            color: selected ? AppColors.info : AppColors.border,
+            width: selected ? 1.5 : 0.5,
           ),
-        );
-      },
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 12,
+              height: 12,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                title,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: selected ? AppColors.info : AppColors.textPrimary,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ),
+            if (selected) const Icon(Icons.check_circle, size: 18, color: AppColors.info),
+          ],
+        ),
+      ),
     );
   }
 }

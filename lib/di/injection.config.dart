@@ -28,8 +28,12 @@ import 'package:flutter_camera/data/network/api/camera_control_api_service.dart'
     as _i951;
 import 'package:flutter_camera/data/network/api/camera_stream_api_service.dart'
     as _i174;
+import 'package:flutter_camera/data/network/api/common_enums_api_service.dart'
+    as _i947;
 import 'package:flutter_camera/data/network/api/notification_api_service.dart'
     as _i678;
+import 'package:flutter_camera/data/network/api/real_time_thermal_api_service.dart'
+    as _i166;
 import 'package:flutter_camera/data/network/api/user_token_api_service.dart'
     as _i1045;
 import 'package:flutter_camera/data/network/api/vision_notification_api_service.dart'
@@ -48,8 +52,12 @@ import 'package:flutter_camera/data/network/repositories/camera_stream_repositor
     as _i299;
 import 'package:flutter_camera/data/network/repositories/notification_repository_impl.dart'
     as _i761;
+import 'package:flutter_camera/data/network/repositories/real_time_thermal_repository_impl.dart'
+    as _i1007;
 import 'package:flutter_camera/data/network/repositories/vision_notifications_repository_impl.dart'
     as _i952;
+import 'package:flutter_camera/data/services/common_enums_service.dart'
+    as _i253;
 import 'package:flutter_camera/data/services/firebase_messaging_service.dart'
     as _i935;
 import 'package:flutter_camera/data/services/screenshot_service.dart' as _i170;
@@ -70,6 +78,8 @@ import 'package:flutter_camera/domain/repositories/camera_stream_repository.dart
     as _i39;
 import 'package:flutter_camera/domain/repositories/notifications_repository.dart'
     as _i819;
+import 'package:flutter_camera/domain/repositories/real_time_thermal_repository.dart'
+    as _i464;
 import 'package:flutter_camera/domain/repositories/vision_notifications_repository.dart'
     as _i983;
 import 'package:flutter_camera/domain/usecase/area/get_all_tree_use_case.dart'
@@ -98,6 +108,8 @@ import 'package:flutter_camera/domain/usecase/notification/get_notification_deta
     as _i999;
 import 'package:flutter_camera/domain/usecase/notification/get_notifications_use_case.dart'
     as _i362;
+import 'package:flutter_camera/domain/usecase/thermal/get_real_time_thermal_data_use_case.dart'
+    as _i545;
 import 'package:flutter_camera/domain/usecase/vision_notification/get_vision_notifications_use_case.dart'
     as _i527;
 import 'package:flutter_camera/presentation/bloc/area_devices/area_devices_bloc.dart'
@@ -109,6 +121,8 @@ import 'package:flutter_camera/presentation/bloc/camera_control/camera_control_b
     as _i470;
 import 'package:flutter_camera/presentation/bloc/camera_stream/camera_stream_bloc.dart'
     as _i295;
+import 'package:flutter_camera/presentation/bloc/real_time_thermal/real_time_thermal_bloc.dart'
+    as _i621;
 import 'package:flutter_camera/presentation/ui/device/bloc/device_bloc.dart'
     as _i840;
 import 'package:flutter_camera/presentation/ui/notification/bloc/notification_bloc.dart'
@@ -187,6 +201,24 @@ extension GetItInjectableX on _i174.GetIt {
     gh.factory<_i1036.AreaDevicesApiService>(
       () => _i1036.AreaDevicesApiService(
         gh<_i361.Dio>(),
+        gh<_i183.AuthLocalPreference>(),
+      ),
+    );
+    gh.factory<_i166.RealTimeThermalApiService>(
+      () => _i166.RealTimeThermalApiService(
+        gh<_i361.Dio>(),
+        gh<_i183.AuthLocalPreference>(),
+      ),
+    );
+    gh.factory<_i947.CommonEnumsApiService>(
+      () => _i947.CommonEnumsApiService(
+        gh<_i361.Dio>(),
+        gh<_i183.AuthLocalPreference>(),
+      ),
+    );
+    gh.lazySingleton<_i253.CommonEnumsService>(
+      () => _i253.CommonEnumsService(
+        gh<_i947.CommonEnumsApiService>(),
         gh<_i183.AuthLocalPreference>(),
       ),
     );
@@ -270,6 +302,12 @@ extension GetItInjectableX on _i174.GetIt {
         gh<_i183.AuthLocalPreference>(),
       ),
     );
+    gh.lazySingleton<_i464.RealTimeThermalRepository>(
+      () => _i1007.RealTimeThermalRepositoryImpl(
+        gh<_i166.RealTimeThermalApiService>(),
+        gh<_i183.AuthLocalPreference>(),
+      ),
+    );
     gh.lazySingleton<_i88.AuthRepository>(
       () => _i162.AuthRepositoryImpl(
         gh<_i531.AuthApiService>(),
@@ -341,6 +379,11 @@ extension GetItInjectableX on _i174.GetIt {
         gh<_i935.FirebaseMessagingService>(),
       ),
     );
+    gh.factory<_i545.GetRealTimeThermalDataUseCase>(
+      () => _i545.GetRealTimeThermalDataUseCase(
+        gh<_i464.RealTimeThermalRepository>(),
+      ),
+    );
     gh.factory<_i519.GetAreaDevicesUseCase>(
       () => _i519.GetAreaDevicesUseCase(gh<_i627.AreaDevicesRepository>()),
     );
@@ -349,6 +392,10 @@ extension GetItInjectableX on _i174.GetIt {
     );
     gh.factory<_i489.AreaDevicesBloc>(
       () => _i489.AreaDevicesBloc(gh<_i519.GetAreaDevicesUseCase>()),
+    );
+    gh.factory<_i621.RealTimeThermalBloc>(
+      () =>
+          _i621.RealTimeThermalBloc(gh<_i545.GetRealTimeThermalDataUseCase>()),
     );
     return this;
   }
