@@ -456,8 +456,9 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
     }
 
     return InteractiveViewer(
-      minScale: 0.5,
-      maxScale: 3.0,
+      minScale: 0.3,
+      maxScale: 5.0,
+      constrained: false,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: SingleChildScrollView(
