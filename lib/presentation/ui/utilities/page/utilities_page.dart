@@ -418,6 +418,8 @@ class _TemperatureStatsTable extends StatefulWidget {
 class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
   final Map<String, RealTimeThermalBloc> _thermalBlocs = {};
   final ScrollController _scrollController = ScrollController();
+  final ScrollController _tableHorizontalController = ScrollController();
+  final ScrollController _tableVerticalController = ScrollController();
   Timer? _refreshTimer;
   bool _isInitialLoad = true;
 
@@ -526,6 +528,8 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
   void dispose() {
     _refreshTimer?.cancel();
     _scrollController.dispose();
+    _tableHorizontalController.dispose();
+    _tableVerticalController.dispose();
     for (final bloc in _thermalBlocs.values) {
       bloc.close();
     }
@@ -608,39 +612,64 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
     final statistics = _calculateStatistics(tableData);
     final availableTypes = _getAvailableComparisonTypes(tableData);
 
-    return RefreshIndicator(
-      onRefresh: _manualRefresh,
-      child: SingleChildScrollView(
-        controller: _scrollController,
-        child: Column(
-          children: [
-            // Statistics Cards
-            _StatisticsCards(statistics: statistics),
-            const SizedBox(height: AppSpacing.md),
-            // All Pie Charts in PageView (Tổng hợp + Các loại)
-            _ComparisonPieCharts(
-              tableData: tableData,
-              availableTypes: availableTypes,
-              onFilterApplied: widget.onPieChartFilterApplied,
-              currentFilter: widget.filter,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            // Temperature Table
-            SizedBox(
-              height: 600, // Fixed height for table
-              child: InteractiveViewer(
-                minScale: 0.3,
-                maxScale: 5.0,
-                constrained: false,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: _buildNestedHeaderTable(tableData),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return RefreshIndicator(
+          onRefresh: _manualRefresh,
+          child: SingleChildScrollView(
+            controller: _scrollController,
+            child: Column(
+              children: [
+                // Statistics Cards
+                _StatisticsCards(statistics: statistics),
+                const SizedBox(height: AppSpacing.md),
+                // Pie Charts
+                _ComparisonPieCharts(
+                  tableData: tableData,
+                  availableTypes: availableTypes,
+                  onFilterApplied: widget.onPieChartFilterApplied,
+                  currentFilter: widget.filter,
                 ),
-              ),
+                const SizedBox(height: AppSpacing.md),
+                // Temperature Table - fixed height
+                SizedBox(
+                  height: constraints.maxHeight * 0.8, // 80% of screen height
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.border, width: 1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: ScrollbarTheme(
+                        data: ScrollbarThemeData(
+                          thumbVisibility: WidgetStateProperty.all(true),
+                          trackVisibility: WidgetStateProperty.all(true),
+                          thickness: WidgetStateProperty.all(8.0),
+                          radius: const Radius.circular(4.0),
+                          crossAxisMargin: 2.0,
+                          mainAxisMargin: 2.0,
+                        ),
+                        child: SingleChildScrollView(
+                          controller: _tableHorizontalController,
+                          scrollDirection: Axis.horizontal,
+                          physics: const BouncingScrollPhysics(),
+                          child: SingleChildScrollView(
+                            controller: _tableVerticalController,
+                            scrollDirection: Axis.vertical,
+                            physics: const BouncingScrollPhysics(),
+                            child: _buildNestedHeaderTable(tableData),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
