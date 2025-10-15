@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -14,36 +16,45 @@ import 'package:flutter_camera/domain/model/area_devices.dart';
 import 'package:flutter_camera/domain/model/real_time_thermal_data.dart';
 import 'package:flutter_camera/data/services/common_enums_service.dart';
 import 'package:flutter_camera/data/network/model/common_enums_model.dart';
+import 'package:fl_chart/fl_chart.dart';
 
 // Temperature Stats Filter Model
 class TemperatureStatsFilter {
   final List<String>? deviceNames; // Multiple device selection
   final int? evaluationId;
+  final String? comparisonType; // Filter by comparison type (Enviroment, MinPhase, etc.)
   final String? sortBy;
   final bool sortDescending;
 
   const TemperatureStatsFilter({
     this.deviceNames,
     this.evaluationId,
+    this.comparisonType,
     this.sortBy,
     this.sortDescending = true,
   });
 
   bool get hasActiveFilters =>
-      (deviceNames != null && deviceNames!.isNotEmpty) || evaluationId != null || sortBy != null;
+      (deviceNames != null && deviceNames!.isNotEmpty) ||
+      evaluationId != null ||
+      comparisonType != null ||
+      sortBy != null;
 
   TemperatureStatsFilter copyWith({
     List<String>? deviceNames,
     int? evaluationId,
+    String? comparisonType,
     String? sortBy,
     bool? sortDescending,
     bool clearDevices = false,
     bool clearEvaluation = false,
+    bool clearComparisonType = false,
     bool clearSort = false,
   }) {
     return TemperatureStatsFilter(
       deviceNames: clearDevices ? null : (deviceNames ?? this.deviceNames),
       evaluationId: clearEvaluation ? null : (evaluationId ?? this.evaluationId),
+      comparisonType: clearComparisonType ? null : (comparisonType ?? this.comparisonType),
       sortBy: clearSort ? null : (sortBy ?? this.sortBy),
       sortDescending: sortDescending ?? this.sortDescending,
     );
@@ -105,6 +116,17 @@ class _TemperatureStatsView extends StatefulWidget {
 class _TemperatureStatsViewState extends State<_TemperatureStatsView> {
   TemperatureStatsFilter _filter = const TemperatureStatsFilter();
   final GlobalKey _filterButtonKey = GlobalKey();
+
+  void _applyPieChartFilter(int evaluationId, String? comparisonType) {
+    setState(() {
+      // Toggle: If same filter is clicked again, clear it
+      if (_filter.evaluationId == evaluationId && _filter.comparisonType == comparisonType) {
+        _filter = _filter.copyWith(clearEvaluation: true, clearComparisonType: true);
+      } else {
+        _filter = _filter.copyWith(evaluationId: evaluationId, comparisonType: comparisonType);
+      }
+    });
+  }
 
   void _showFilterDialog() {
     final RenderBox? renderBox = _filterButtonKey.currentContext?.findRenderObject() as RenderBox?;
@@ -319,6 +341,7 @@ class _TemperatureStatsViewState extends State<_TemperatureStatsView> {
                           child: _TemperatureStatsTable(
                             devices: devicesState.devices,
                             filter: _filter,
+                            onPieChartFilterApplied: _applyPieChartFilter,
                           ),
                         ),
                       ),
@@ -380,8 +403,13 @@ class _TemperatureStatsViewState extends State<_TemperatureStatsView> {
 class _TemperatureStatsTable extends StatefulWidget {
   final List<DeviceItem> devices;
   final TemperatureStatsFilter filter;
+  final Function(int evaluationId, String? comparisonType) onPieChartFilterApplied;
 
-  const _TemperatureStatsTable({required this.devices, required this.filter});
+  const _TemperatureStatsTable({
+    required this.devices,
+    required this.filter,
+    required this.onPieChartFilterApplied,
+  });
 
   @override
   State<_TemperatureStatsTable> createState() => _TemperatureStatsTableState();
@@ -389,10 +417,18 @@ class _TemperatureStatsTable extends StatefulWidget {
 
 class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
   final Map<String, RealTimeThermalBloc> _thermalBlocs = {};
+  final ScrollController _scrollController = ScrollController();
+  Timer? _refreshTimer;
+  bool _isInitialLoad = true;
 
   @override
   void initState() {
     super.initState();
+    _initializeThermalBlocs();
+    _startAutoRefresh();
+  }
+
+  void _initializeThermalBlocs() {
     // Filter only Machine devices
     final machineDevices = widget.devices
         .where((device) => device.deviceType == 'Machine')
@@ -405,31 +441,139 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
       print(
         '   📡 Fetching thermal data for: ${device.name} (machineId=${device.machineId}, id=${device.id}, type=${device.deviceType})',
       );
-      final bloc = getIt<RealTimeThermalBloc>()
-        ..add(
+
+      // Only create new bloc if not exists
+      if (!_thermalBlocs.containsKey(device.key)) {
+        final bloc = getIt<RealTimeThermalBloc>();
+        _thermalBlocs[device.key] = bloc;
+
+        // Listen to bloc state changes
+        bloc.stream.listen((state) {
+          if (mounted && state is RealTimeThermalLoaded) {
+            if (_isInitialLoad) {
+              // Initial load - rebuild normally
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  setState(() {
+                    _isInitialLoad = false;
+                  });
+                }
+              });
+            } else {
+              // Auto-refresh - preserve scroll position
+              final scrollOffset = _scrollController.hasClients ? _scrollController.offset : 0.0;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  setState(() {});
+                  // Restore scroll position after rebuild
+                  if (_scrollController.hasClients) {
+                    _scrollController.jumpTo(scrollOffset);
+                  }
+                }
+              });
+            }
+          }
+        });
+      }
+
+      // Fetch data
+      _thermalBlocs[device.key]!.add(
+        FetchRealTimeThermalData(
+          machineId: device.machineId,
+          id: device.id,
+          deviceType: device.deviceType,
+        ),
+      );
+    }
+  }
+
+  void _startAutoRefresh() {
+    // Refresh data every 60 seconds
+    _refreshTimer = Timer.periodic(const Duration(seconds: 60), (timer) {
+      if (mounted) {
+        print('🔄 Auto-refreshing thermal data...');
+        _refreshData();
+      }
+    });
+  }
+
+  void _refreshData() {
+    final machineDevices = widget.devices
+        .where((device) => device.deviceType == 'Machine')
+        .toList();
+
+    for (final device in machineDevices) {
+      final bloc = _thermalBlocs[device.key];
+      if (bloc != null) {
+        bloc.add(
           FetchRealTimeThermalData(
             machineId: device.machineId,
             id: device.id,
             deviceType: device.deviceType,
           ),
         );
-      _thermalBlocs[device.key] = bloc;
-
-      // Listen to bloc state changes to trigger rebuild
-      bloc.stream.listen((state) {
-        if (mounted) {
-          setState(() {});
-        }
-      });
+      }
     }
+  }
+
+  Future<void> _manualRefresh() async {
+    // Manual refresh
+    print('🔄 Manual refresh...');
+    _refreshData();
   }
 
   @override
   void dispose() {
+    _refreshTimer?.cancel();
+    _scrollController.dispose();
     for (final bloc in _thermalBlocs.values) {
       bloc.close();
     }
     super.dispose();
+  }
+
+  Map<String, dynamic> _calculateStatistics(List<Map<String, dynamic>> tableData) {
+    if (tableData.isEmpty) {
+      return {'envTemp': '-', 'maxTemp': '-', 'maxDevice': '-', 'minTemp': '-', 'minDevice': '-'};
+    }
+
+    // Calculate average environment temperature
+    double envTempSum = 0;
+    int envCount = 0;
+    for (final row in tableData) {
+      final envTemp = row['enviromentTemp'];
+      if (envTemp != null) {
+        envTempSum += double.tryParse(envTemp) ?? 0;
+        envCount++;
+      }
+    }
+    final avgEnvTemp = envCount > 0 ? (envTempSum / envCount).toStringAsFixed(1) : '-';
+
+    // Find max and min current temperature with device names
+    double maxTemp = double.negativeInfinity;
+    double minTemp = double.infinity;
+    String maxDevice = '';
+    String minDevice = '';
+
+    for (final row in tableData) {
+      final current = double.tryParse(row['current'] ?? '0') ?? 0;
+      if (current > maxTemp) {
+        maxTemp = current;
+        maxDevice = row['deviceName'] ?? '';
+      }
+      if (current < minTemp) {
+        minTemp = current;
+        minDevice = row['deviceName'] ?? '';
+      }
+    }
+
+    return {
+      'envTemp': avgEnvTemp,
+      'maxTemp': maxTemp.toStringAsFixed(1),
+      'maxDevice': maxDevice,
+      'minTemp': minTemp.toStringAsFixed(1),
+      'minDevice': minDevice,
+    };
   }
 
   @override
@@ -450,27 +594,93 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
               'Không có dữ liệu phù hợp',
               style: AppTextStyles.bodyLarge.copyWith(color: AppColors.textSecondary),
             ),
+            const SizedBox(height: AppSpacing.md),
+            ElevatedButton.icon(
+              onPressed: _manualRefresh,
+              icon: Icon(Icons.refresh),
+              label: Text('Làm mới'),
+            ),
           ],
         ),
       );
     }
 
-    return InteractiveViewer(
-      minScale: 0.3,
-      maxScale: 5.0,
-      constrained: false,
+    final statistics = _calculateStatistics(tableData);
+    final availableTypes = _getAvailableComparisonTypes(tableData);
+
+    return RefreshIndicator(
+      onRefresh: _manualRefresh,
       child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: SingleChildScrollView(
-          scrollDirection: Axis.vertical,
-          child: _buildNestedHeaderTable(tableData),
+        controller: _scrollController,
+        child: Column(
+          children: [
+            // Statistics Cards
+            _StatisticsCards(statistics: statistics),
+            const SizedBox(height: AppSpacing.md),
+            // All Pie Charts in PageView (Tổng hợp + Các loại)
+            _ComparisonPieCharts(
+              tableData: tableData,
+              availableTypes: availableTypes,
+              onFilterApplied: widget.onPieChartFilterApplied,
+              currentFilter: widget.filter,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            // Temperature Table
+            SizedBox(
+              height: 600, // Fixed height for table
+              child: InteractiveViewer(
+                minScale: 0.3,
+                maxScale: 5.0,
+                constrained: false,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: _buildNestedHeaderTable(tableData),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
+  Map<String, double> _calculateColumnWidths(List<Map<String, dynamic>> tableData) {
+    // Minimum widths for each column type
+    const minPointNameWidth = 120.0;
+    const minValueWidth = 70.0;
+    const minIconWidth = 50.0;
+    const minEvalWidth = 80.0;
+
+    double maxPointNameWidth = minPointNameWidth;
+
+    // Calculate max width for point names
+    for (final row in tableData) {
+      final pointName = row['pointName'] ?? '';
+      final deviceName = row['deviceName'] ?? '';
+      // Estimate width: ~8 pixels per character for Vietnamese text
+      final pointWidth = (pointName.length * 8.0) + 20;
+      final deviceWidth = (deviceName.length * 8.0) + 20;
+      final totalWidth = pointWidth > deviceWidth ? pointWidth : deviceWidth;
+      if (totalWidth > maxPointNameWidth) {
+        maxPointNameWidth = totalWidth;
+      }
+    }
+
+    // Cap the max width to avoid too wide columns
+    maxPointNameWidth = maxPointNameWidth.clamp(minPointNameWidth, 200.0);
+
+    return {
+      'pointName': maxPointNameWidth,
+      'value': minValueWidth,
+      'temp': minIconWidth,
+      'delta': minIconWidth,
+      'eval': minEvalWidth,
+    };
+  }
+
   Widget _buildNestedHeaderTable(List<Map<String, dynamic>> tableData) {
     final availableTypes = _getAvailableComparisonTypes(tableData);
+    final columnWidths = _calculateColumnWidths(tableData);
 
     return Container(
       decoration: BoxDecoration(border: Border.all(color: AppColors.border, width: 0.5)),
@@ -478,19 +688,25 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Multi-level Header (2 rows)
-          _buildMultiLevelHeader(availableTypes),
+          _buildMultiLevelHeader(availableTypes, columnWidths),
           // Data Rows
-          ...tableData.map((row) => _buildDataRow(row, availableTypes)),
+          ...tableData.map((row) => _buildDataRow(row, availableTypes, columnWidths)),
         ],
       ),
     );
   }
 
-  Widget _buildMultiLevelHeader(List<Map<String, String>> availableTypes) {
+  Widget _buildMultiLevelHeader(
+    List<Map<String, String>> availableTypes,
+    Map<String, double> columnWidths,
+  ) {
     final headerBgColor = AppColors.secondary.withOpacity(0.08);
     const row1Height = 32.0;
     const row2Height = 32.0;
     const totalHeight = row1Height + row2Height;
+
+    final groupWidth = columnWidths['temp']! + columnWidths['delta']! + columnWidths['eval']!;
+    final deviceGroupWidth = columnWidths['value']! * 3;
 
     return Column(
       children: [
@@ -501,20 +717,18 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
           child: Row(
             children: [
               // Điểm đo (rowspan 2)
-              _buildHeaderCellWithRowSpan('Điểm đo', width: 180, height: totalHeight),
-              // Hiện tại (rowspan 2)
-              _buildHeaderCellWithRowSpan('Hiện tại (°C)', width: 100, height: totalHeight),
-              // Max (rowspan 2)
-              _buildHeaderCellWithRowSpan('Cao nhất (°C)', width: 100, height: totalHeight),
-              // Min (rowspan 2)
-              _buildHeaderCellWithRowSpan('Thấp nhất (°C)', width: 100, height: totalHeight),
-              // AVG (rowspan 2)
-              _buildHeaderCellWithRowSpan('Trung bình (°C)', width: 100, height: totalHeight),
+              _buildHeaderCellWithRowSpan(
+                'Điểm đo',
+                width: columnWidths['pointName']!,
+                height: totalHeight,
+              ),
+              // Thiết bị group (colspan 3)
+              _buildGroupHeaderCell('Thiết bị', width: deviceGroupWidth, height: row1Height),
               // Comparison type groups (colspan 3 each)
               ...availableTypes.map(
                 (type) => _buildGroupHeaderCell(
                   type['displayName'] as String,
-                  width: 350,
+                  width: groupWidth,
                   height: row1Height,
                 ),
               ),
@@ -527,18 +741,57 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
           color: headerBgColor,
           child: Row(
             children: [
-              // Empty spacers for rowspan cells (5 columns)
-              SizedBox(width: 180, height: row2Height), // Điểm đo
-              SizedBox(width: 100, height: row2Height), // Hiện tại
-              SizedBox(width: 100, height: row2Height), // Max
-              SizedBox(width: 100, height: row2Height), // Min
-              SizedBox(width: 100, height: row2Height), // AVG
+              // Empty spacer for rowspan cell
+              SizedBox(width: columnWidths['pointName']!, height: row2Height), // Điểm đo
+              // Thiết bị sub-columns with icons
+              _buildSubHeaderCellWithIcon(
+                'Max (°C)',
+                Icons.trending_up,
+                'Nhiệt độ cao nhất trong 24h',
+                width: columnWidths['value']!,
+                height: row2Height,
+                subText: 'Max (°C)',
+              ),
+              _buildSubHeaderCellWithIcon(
+                'Min (°C)',
+                Icons.trending_down,
+                'Nhiệt độ thấp nhất trong 24h',
+                width: columnWidths['value']!,
+                height: row2Height,
+                subText: 'Min (°C)',
+              ),
+              _buildSubHeaderCellWithIcon(
+                'AVG (°C)',
+                Icons.show_chart,
+                'Nhiệt độ trung bình trong 24h',
+                width: columnWidths['value']!,
+                height: row2Height,
+                subText: 'AVG (°C)',
+              ),
               // Sub-columns for each comparison type
               ...availableTypes.expand(
-                (_) => [
-                  _buildSubHeaderCell('Nhiệt độ (°C)', width: 120, height: row2Height),
-                  _buildSubHeaderCell('Chênh lệch (°C)', width: 110, height: row2Height),
-                  _buildSubHeaderCell('Đánh giá', width: 120, height: row2Height),
+                (type) => [
+                  _buildSubHeaderCellWithIcon(
+                    'Nhiệt độ (°C)',
+                    Icons.thermostat,
+                    'Nhiệt độ ${type['displayName']?.toLowerCase()}',
+                    width: columnWidths['temp']!,
+                    height: row2Height,
+                  ),
+                  _buildSubHeaderCellWithIcon(
+                    'Chênh lệch (°C)',
+                    Icons.compare_arrows,
+                    'Chênh lệch nhiệt độ so với ${type['displayName']?.toLowerCase()}',
+                    width: columnWidths['delta']!,
+                    height: row2Height,
+                  ),
+                  _buildSubHeaderCellWithIcon(
+                    'Đánh giá',
+                    Icons.assessment,
+                    'Đánh giá trạng thái nhiệt độ so với ${type['displayName']?.toLowerCase()}',
+                    width: columnWidths['eval']!,
+                    height: row2Height,
+                  ),
                 ],
               ),
             ],
@@ -631,28 +884,120 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
     );
   }
 
-  Widget _buildSubHeaderCell(String text, {required double width, required double height}) {
-    return Container(
-      width: width,
-      height: height,
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-      decoration: BoxDecoration(
-        border: Border(right: BorderSide(color: AppColors.border, width: 0.5)),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        text,
-        style: AppTextStyles.bodySmall.copyWith(
-          fontWeight: FontWeight.w600,
-          color: AppColors.textPrimary,
-          fontSize: 11,
+  Widget _buildSubHeaderCellWithIcon(
+    String text,
+    IconData icon,
+    String tooltip, {
+    required double width,
+    required double height,
+    String? subText,
+  }) {
+    return GestureDetector(
+      onTap: () => _showColumnTooltip(text, tooltip),
+      child: Container(
+        width: width,
+        height: height,
+        decoration: BoxDecoration(
+          border: Border(right: BorderSide(color: AppColors.border, width: 0.5)),
         ),
-        textAlign: TextAlign.center,
+        child: Stack(
+          children: [
+            // Main icon - centered
+            Center(
+              child: subText == null
+                  ? Icon(icon, size: 20, color: AppColors.secondary)
+                  : Text(
+                      subText,
+                      style: AppTextStyles.bodySmall.copyWith(color: AppColors.secondary),
+                    ),
+            ),
+            // Info icon at top-right corner
+            Positioned(
+              top: 2,
+              right: 2,
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.border, width: 0.5),
+                ),
+                child: Icon(Icons.info, size: 8, color: AppColors.secondary),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildDataRow(Map<String, dynamic> row, List<Map<String, String>> availableTypes) {
+  void _showColumnTooltip(String title, String description) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black26,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(AppBorderRadius.medium),
+              border: Border.all(color: AppColors.border, width: 0.5),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.info_outline, color: AppColors.secondary, size: 24),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: AppTextStyles.bodyLarge.copyWith(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  description,
+                  style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text('Đóng', style: TextStyle(color: AppColors.secondary)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDataRow(
+    Map<String, dynamic> row,
+    List<Map<String, String>> availableTypes,
+    Map<String, double> columnWidths,
+  ) {
     return Container(
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
@@ -661,10 +1006,10 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
         children: [
           // Điểm đo
           SizedBox(
-            width: 180,
+            width: columnWidths['pointName']!,
             height: 52,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               decoration: BoxDecoration(
                 border: Border(right: BorderSide(color: AppColors.border, width: 0.5)),
               ),
@@ -679,36 +1024,27 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
                       style: AppTextStyles.bodyMedium.copyWith(
                         fontWeight: FontWeight.w600,
                         color: AppColors.textPrimary,
-                        fontSize: 13,
+                        fontSize: 12,
                       ),
                       textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 2),
                     Text(
                       row['deviceName'] ?? '',
                       style: AppTextStyles.bodySmall.copyWith(
                         color: AppColors.textSecondary,
-                        fontSize: 11,
+                        fontSize: 10,
                       ),
                       textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
               ),
             ),
-          ),
-          // Hiện tại
-          _buildDataCell(
-            child: Text(
-              row['current'] ?? '-',
-              style: AppTextStyles.bodySmall.copyWith(
-                color: row['currentColor'] ?? AppColors.textPrimary,
-                fontWeight: FontWeight.w600,
-                fontSize: 12,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            width: 100,
           ),
           // Max
           _buildDataCell(
@@ -730,7 +1066,7 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
                 ),
               ],
             ),
-            width: 100,
+            width: columnWidths['value']!,
           ),
           // Min
           _buildDataCell(
@@ -752,7 +1088,7 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
                 ),
               ],
             ),
-            width: 100,
+            width: columnWidths['value']!,
           ),
           // AVG
           _buildDataCell(
@@ -765,7 +1101,7 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
               ),
               textAlign: TextAlign.center,
             ),
-            width: 100,
+            width: columnWidths['value']!,
           ),
           // Dynamic comparison type columns
           ...availableTypes.expand((type) {
@@ -787,14 +1123,17 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
                   ),
                   textAlign: TextAlign.center,
                 ),
-                width: 120,
+                width: columnWidths['temp']!,
               ),
               // Chênh lệch
-              _buildDataCell(child: _buildDeltaCellContent(row[deltaKey]), width: 110),
+              _buildDataCell(
+                child: _buildDeltaCellContent(row[deltaKey]),
+                width: columnWidths['delta']!,
+              ),
               // Đánh giá
               _buildDataCell(
                 child: _buildEvaluationCellContent(row[evalKey], row[configKey]),
-                width: 120,
+                width: columnWidths['eval']!,
               ),
             ];
           }),
@@ -850,23 +1189,27 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       decoration: BoxDecoration(color: config['bgColor'], borderRadius: BorderRadius.circular(4)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(config['icon'], size: 11, color: config['color']),
-          const SizedBox(width: 3),
-          Text(
-            text,
-            style: AppTextStyles.bodySmall.copyWith(
-              color: config['color'],
-              fontWeight: FontWeight.w600,
-              fontSize: 10,
+          Icon(config['icon'], size: 10, color: config['color']),
+          const SizedBox(width: 2),
+          Flexible(
+            child: Text(
+              text,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: config['color'],
+                fontWeight: FontWeight.w600,
+                fontSize: 9,
+              ),
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
-            textAlign: TextAlign.center,
           ),
         ],
       ),
@@ -991,10 +1334,8 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
       }).toList();
     }
 
-    // Filter by evaluation (check all comparison types)
+    // Filter by evaluation and comparison type
     if (widget.filter.evaluationId != null) {
-      final comparisonTypes = _getComparisonTypes();
-
       Color? targetColor;
       switch (widget.filter.evaluationId!) {
         case 1: // Tốt
@@ -1014,14 +1355,26 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
       filteredData = filteredData.where((row) {
         bool matchesEvaluation = false;
 
-        for (final type in comparisonTypes) {
-          final key = type['key']!;
-          final configKey = '${key.toLowerCase()}Config';
+        if (widget.filter.comparisonType != null) {
+          // Filter by specific comparison type
+          final configKey = '${widget.filter.comparisonType!.toLowerCase()}Config';
           final config = row[configKey] as Map<String, dynamic>?;
 
           if (config != null && config['color'] == targetColor) {
             matchesEvaluation = true;
-            break;
+          }
+        } else {
+          // Filter by any comparison type
+          final comparisonTypes = _getComparisonTypes();
+          for (final type in comparisonTypes) {
+            final key = type['key']!;
+            final configKey = '${key.toLowerCase()}Config';
+            final config = row[configKey] as Map<String, dynamic>?;
+
+            if (config != null && config['color'] == targetColor) {
+              matchesEvaluation = true;
+              break;
+            }
           }
         }
 
@@ -1056,6 +1409,541 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
 }
 
 enum ThermalStatus { normal, warning, critical }
+
+// Statistics Cards Widget
+class _StatisticsCards extends StatelessWidget {
+  final Map<String, dynamic> statistics;
+
+  const _StatisticsCards({required this.statistics});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppBorderRadius.medium),
+        border: Border.all(color: AppColors.border, width: 0.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Environment Temperature
+          _StatRow(
+            title: 'Nhiệt độ môi trường',
+            value: '${statistics['envTemp']}°C',
+            icon: Icons.thermostat,
+            iconColor: Colors.blue,
+            bgColor: Colors.blue.shade50,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          // Max Temperature
+          _StatRow(
+            title: 'Max',
+            value: '${statistics['maxTemp']}°C',
+            subtitle: statistics['maxDevice'],
+            icon: Icons.trending_up,
+            iconColor: Colors.red,
+            bgColor: Colors.red.shade50,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          // Min Temperature
+          _StatRow(
+            title: 'Min',
+            value: '${statistics['minTemp']}°C',
+            subtitle: statistics['minDevice'],
+            icon: Icons.trending_down,
+            iconColor: Colors.green,
+            bgColor: Colors.green.shade50,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Single Stat Row Widget
+class _StatRow extends StatelessWidget {
+  final String title;
+  final String value;
+  final String? subtitle;
+  final IconData icon;
+  final Color iconColor;
+  final Color bgColor;
+
+  const _StatRow({
+    required this.title,
+    required this.value,
+    this.subtitle,
+    required this.icon,
+    required this.iconColor,
+    required this.bgColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        // Icon
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.sm),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(AppBorderRadius.small),
+          ),
+          child: Icon(icon, color: iconColor, size: 24),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        // Content
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Row(
+                children: [
+                  Text(
+                    value,
+                    style: AppTextStyles.headline3.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        '($subtitle)',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// Comparison Pie Charts Widget with PageView (Tổng hợp + Từng loại)
+class _ComparisonPieCharts extends StatefulWidget {
+  final List<Map<String, dynamic>> tableData;
+  final List<Map<String, String>> availableTypes;
+  final Function(int evaluationId, String? comparisonType) onFilterApplied;
+  final TemperatureStatsFilter currentFilter;
+
+  const _ComparisonPieCharts({
+    required this.tableData,
+    required this.availableTypes,
+    required this.onFilterApplied,
+    required this.currentFilter,
+  });
+
+  @override
+  State<_ComparisonPieCharts> createState() => _ComparisonPieChartsState();
+}
+
+class _ComparisonPieChartsState extends State<_ComparisonPieCharts> {
+  final PageController _pageController = PageController();
+  int _currentPage = 0;
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  Map<String, int> _calculateTotalStats() {
+    final Map<String, int> stats = {'good': 0, 'fair': 0, 'average': 0, 'bad': 0};
+    final processedDevices = <String>{};
+
+    final comparisonTypes = [
+      'enviroment',
+      'threshold',
+      'minphase',
+      'twoarea',
+      'globalminphase',
+      'globaltwoarea',
+    ];
+
+    for (final row in widget.tableData) {
+      final deviceKey = '${row['pointName']}_${row['deviceName']}';
+
+      // Only count each device once (not multiple times for different monitor points)
+      if (processedDevices.contains(deviceKey)) continue;
+      processedDevices.add(deviceKey);
+
+      // Find worst (lowest) evaluation across all comparison types for this device
+      int worstEvalId = 1; // Default: Tốt (best)
+
+      for (final typeKey in comparisonTypes) {
+        final configKey = '${typeKey}Config';
+        final config = row[configKey] as Map<String, dynamic>?;
+
+        if (config != null) {
+          final color = config['color'];
+          int evalId = 1;
+
+          if (color == Colors.red) {
+            evalId = 4; // Xấu (worst)
+          } else if (color == Colors.orange) {
+            evalId = 3; // Trung bình
+          } else if (color == Colors.lightGreen) {
+            evalId = 2; // Khá
+          } else if (color == Colors.green) {
+            evalId = 1; // Tốt (best)
+          }
+
+          // Keep the worst evaluation
+          if (evalId > worstEvalId) {
+            worstEvalId = evalId;
+          }
+        }
+      }
+
+      // Count based on worst evaluation
+      if (worstEvalId == 4) {
+        stats['bad'] = (stats['bad'] ?? 0) + 1;
+      } else if (worstEvalId == 3) {
+        stats['average'] = (stats['average'] ?? 0) + 1;
+      } else if (worstEvalId == 2) {
+        stats['fair'] = (stats['fair'] ?? 0) + 1;
+      } else {
+        stats['good'] = (stats['good'] ?? 0) + 1;
+      }
+    }
+
+    return stats;
+  }
+
+  Map<String, int> _calculateStatsForType(String typeKey) {
+    final Map<String, int> stats = {'good': 0, 'fair': 0, 'average': 0, 'bad': 0};
+
+    for (final row in widget.tableData) {
+      final configKey = '${typeKey.toLowerCase()}Config';
+      final config = row[configKey] as Map<String, dynamic>?;
+
+      if (config != null) {
+        final color = config['color'];
+        if (color == Colors.green) {
+          stats['good'] = (stats['good'] ?? 0) + 1;
+        } else if (color == Colors.lightGreen) {
+          stats['fair'] = (stats['fair'] ?? 0) + 1;
+        } else if (color == Colors.orange) {
+          stats['average'] = (stats['average'] ?? 0) + 1;
+        } else if (color == Colors.red) {
+          stats['bad'] = (stats['bad'] ?? 0) + 1;
+        }
+      }
+    }
+
+    return stats;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Total count = 1 (Tổng hợp) + availableTypes.length
+    final totalPages = 1 + widget.availableTypes.length;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      child: Column(
+        children: [
+          // PageView with pie charts
+          SizedBox(
+            height: 200,
+            child: PageView.builder(
+              controller: _pageController,
+              onPageChanged: (index) {
+                setState(() {
+                  _currentPage = index;
+                });
+              },
+              itemCount: totalPages,
+              itemBuilder: (context, index) {
+                String? currentComparisonType;
+                if (index == 0) {
+                  // First page: Tổng hợp
+                  final stats = _calculateTotalStats();
+                  currentComparisonType = null;
+                  return _buildPieChartCard('Tổng hợp', stats, currentComparisonType);
+                } else {
+                  // Other pages: Từng loại so sánh
+                  final type = widget.availableTypes[index - 1];
+                  final stats = _calculateStatsForType(type['key']!);
+                  currentComparisonType = type['key']!;
+                  return _buildPieChartCard(type['displayName']!, stats, currentComparisonType);
+                }
+              },
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          // Page Indicator (dots)
+          _buildPageIndicator(totalPages),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPieChartCard(String title, Map<String, int> stats, String? comparisonTypeKey) {
+    final total = stats.values.fold(0, (sum, count) => sum + count);
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppBorderRadius.medium),
+        border: Border.all(color: AppColors.border, width: 0.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Thống kê đánh giá - $title',
+            style: AppTextStyles.bodyLarge.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          if (total == 0)
+            Expanded(
+              child: Center(
+                child: Text(
+                  'Không có dữ liệu',
+                  style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+                ),
+              ),
+            )
+          else
+            Expanded(
+              child: Row(
+                children: [
+                  // Pie Chart with tap handler
+                  SizedBox(
+                    width: 100,
+                    height: 100,
+                    child: PieChart(
+                      PieChartData(
+                        sections: _buildPieChartSections(stats),
+                        sectionsSpace: 2,
+                        centerSpaceRadius: 25,
+                        borderData: FlBorderData(show: false),
+                        pieTouchData: PieTouchData(
+                          touchCallback: (FlTouchEvent event, pieTouchResponse) {
+                            if (event is FlTapUpEvent && pieTouchResponse?.touchedSection != null) {
+                              final sectionIndex =
+                                  pieTouchResponse!.touchedSection!.touchedSectionIndex;
+                              _handlePieChartTap(sectionIndex, stats, comparisonTypeKey);
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.lg),
+                  // Legend - clickable
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildClickableLegendItem(
+                          'Tốt',
+                          stats['good'] ?? 0,
+                          Colors.green,
+                          1,
+                          comparisonTypeKey,
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        _buildClickableLegendItem(
+                          'Khá',
+                          stats['fair'] ?? 0,
+                          Colors.lightGreen,
+                          2,
+                          comparisonTypeKey,
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        _buildClickableLegendItem(
+                          'Trung bình',
+                          stats['average'] ?? 0,
+                          Colors.orange,
+                          3,
+                          comparisonTypeKey,
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        _buildClickableLegendItem(
+                          'Xấu',
+                          stats['bad'] ?? 0,
+                          Colors.red,
+                          4,
+                          comparisonTypeKey,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _handlePieChartTap(int sectionIndex, Map<String, int> stats, String? comparisonTypeKey) {
+    // Map section index to evaluation ID
+    final evaluations = [
+      if (stats['good']! > 0) 1,
+      if (stats['fair']! > 0) 2,
+      if (stats['average']! > 0) 3,
+      if (stats['bad']! > 0) 4,
+    ];
+
+    if (sectionIndex >= 0 && sectionIndex < evaluations.length) {
+      final evaluationId = evaluations[sectionIndex];
+      widget.onFilterApplied(evaluationId, comparisonTypeKey);
+    }
+  }
+
+  List<PieChartSectionData> _buildPieChartSections(Map<String, int> stats) {
+    final sections = <PieChartSectionData>[];
+    final data = [
+      {'label': 'Tốt', 'value': stats['good'] ?? 0, 'color': Colors.green},
+      {'label': 'Khá', 'value': stats['fair'] ?? 0, 'color': Colors.lightGreen},
+      {'label': 'Trung bình', 'value': stats['average'] ?? 0, 'color': Colors.orange},
+      {'label': 'Xấu', 'value': stats['bad'] ?? 0, 'color': Colors.red},
+    ];
+
+    for (final item in data) {
+      final value = item['value'] as int;
+      if (value > 0) {
+        sections.add(
+          PieChartSectionData(
+            value: value.toDouble(),
+            color: item['color'] as Color,
+            radius: 30,
+            titleStyle: AppTextStyles.bodySmall.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 11,
+            ),
+            title: value.toString(),
+          ),
+        );
+      }
+    }
+
+    return sections;
+  }
+
+  Widget _buildPageIndicator(int totalPages) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(
+        totalPages,
+        (index) => Container(
+          width: 8,
+          height: 8,
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: _currentPage == index
+                ? AppColors.secondary
+                : AppColors.secondary.withOpacity(0.3),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildClickableLegendItem(
+    String label,
+    int count,
+    Color color,
+    int evaluationId,
+    String? comparisonTypeKey,
+  ) {
+    // Check if this item is currently filtered
+    final isActive =
+        widget.currentFilter.evaluationId == evaluationId &&
+        widget.currentFilter.comparisonType == comparisonTypeKey;
+
+    if (count == 0) {
+      return Row(
+        children: [
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(color: color.withOpacity(0.3), shape: BoxShape.circle),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              '$label: $count',
+              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return InkWell(
+      onTap: () => widget.onFilterApplied(evaluationId, comparisonTypeKey),
+      borderRadius: BorderRadius.circular(AppBorderRadius.small),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+        decoration: isActive
+            ? BoxDecoration(
+                color: AppColors.secondary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(AppBorderRadius.small),
+                border: Border.all(color: AppColors.secondary, width: 1.5),
+              )
+            : null,
+        child: Row(
+          children: [
+            Container(
+              width: 12,
+              height: 12,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                '$label: $count',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                ),
+              ),
+            ),
+            Icon(
+              isActive ? Icons.filter_alt : Icons.filter_alt_outlined,
+              size: 14,
+              color: isActive ? AppColors.secondary : AppColors.secondary.withOpacity(0.6),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 // Filter Dialog Widget
 class _FilterDialog extends StatefulWidget {

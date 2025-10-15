@@ -64,6 +64,9 @@ dependencies:
   provider: ^6.1.2
   equatable: ^2.0.7
 
+  # Charts
+  fl_chart: ^0.69.0
+
   video_player: ^2.8.1 # Native video player with RTSP support
   firebase_core: ^4.1.0
   # visibility_detector: ^0.4.0+2
