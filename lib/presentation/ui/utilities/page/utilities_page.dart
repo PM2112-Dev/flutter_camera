@@ -123,6 +123,8 @@ class _TemperatureStatsView extends StatefulWidget {
 class _TemperatureStatsViewState extends State<_TemperatureStatsView> {
   TemperatureStatsFilter _filter = const TemperatureStatsFilter();
   final GlobalKey _filterButtonKey = GlobalKey();
+  List<Map<String, dynamic>> _tableData = [];
+  List<Map<String, String>> _availableTypes = [];
 
   void _applyPieChartFilter(int evaluationId, String? comparisonType) {
     setState(() {
@@ -254,15 +256,13 @@ class _TemperatureStatsViewState extends State<_TemperatureStatsView> {
                               IconButton(
                                 icon: Icon(Icons.table_chart, color: AppColors.secondary),
                                 onPressed: () {
-                                  final tableData = _getTableData();
-                                  final availableTypes = _getAvailableComparisonTypes(tableData);
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
                                       builder: (context) => TemperatureStatsPage(
                                         area: widget.area,
-                                        tableData: tableData,
-                                        availableTypes: availableTypes,
+                                        tableData: _tableData,
+                                        availableTypes: _availableTypes,
                                         filter: _filter,
                                       ),
                                     ),
@@ -328,15 +328,13 @@ class _TemperatureStatsViewState extends State<_TemperatureStatsView> {
                               IconButton(
                                 icon: Icon(Icons.table_chart, color: AppColors.secondary, size: 20),
                                 onPressed: () {
-                                  final tableData = _getTableData();
-                                  final availableTypes = _getAvailableComparisonTypes(tableData);
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
                                       builder: (context) => TemperatureStatsPage(
                                         area: widget.area,
-                                        tableData: tableData,
-                                        availableTypes: availableTypes,
+                                        tableData: _tableData,
+                                        availableTypes: _availableTypes,
                                         filter: _filter,
                                       ),
                                     ),
@@ -391,6 +389,7 @@ class _TemperatureStatsViewState extends State<_TemperatureStatsView> {
                             devices: devicesState.devices,
                             filter: _filter,
                             onPieChartFilterApplied: _applyPieChartFilter,
+                            onDataUpdated: _updateTableData,
                           ),
                         ),
                       ),
@@ -447,110 +446,14 @@ class _TemperatureStatsViewState extends State<_TemperatureStatsView> {
     );
   }
 
-  List<Map<String, dynamic>> _getTableData() {
-    final List<Map<String, dynamic>> data = [];
-    final comparisonTypes = _getComparisonTypes();
-
-    // Get devices from AreaDevicesBloc
-    final devicesState = context.read<AreaDevicesBloc>().state;
-    if (devicesState is! AreaDevicesLoaded) {
-      print('⚠️ _getTableData: AreaDevicesBloc not loaded');
-      return data;
-    }
-
-    final devices = devicesState.devices.where((device) => device.deviceType == 'Machine').toList();
-    print('🔍 _getTableData: Processing ${devices.length} devices');
-
-    // Lấy data từ _TemperatureStatsTableState vì nó có _thermalBlocs
-    // Tạm thời trả về sample data để test
-    if (devices.isEmpty) {
-      print('⚠️ _getTableData: No machine devices found');
-      return data;
-    }
-
-    // Sample data để test
-    final sampleData = [
-      {
-        'pointName': 'Sample Point 1',
-        'deviceName': 'Device 1',
-        'current': '25.5',
-        'currentColor': Colors.green,
-        'max': '30.0',
-        'min': '20.0',
-        'avg': '25.0',
-        'enviromentTemp': '24.0',
-        'enviromentDelta': '+1.5',
-        'enviromentEval': 'Tốt',
-        'enviromentConfig': {
-          'color': Colors.green,
-          'icon': Icons.check_circle,
-          'bgColor': Colors.green.shade50,
-        },
-      },
-      {
-        'pointName': 'Sample Point 2',
-        'deviceName': 'Device 2',
-        'current': '35.2',
-        'currentColor': Colors.orange,
-        'max': '40.0',
-        'min': '30.0',
-        'avg': '35.0',
-        'enviromentTemp': '24.0',
-        'enviromentDelta': '+11.2',
-        'enviromentEval': 'Trung bình',
-        'enviromentConfig': {
-          'color': Colors.orange,
-          'icon': Icons.warning_amber,
-          'bgColor': Colors.orange.shade50,
-        },
-      },
-    ];
-
-    print('🔍 _getTableData result: ${sampleData.length} rows (sample data)');
-    return sampleData;
-  }
-
-  List<Map<String, String>> _getComparisonTypes() {
-    // Define all possible comparison types based on thresholdTypeList
-    return [
-      {'key': 'Enviroment', 'displayName': 'Môi trường'},
-      {'key': 'Threshold', 'displayName': 'Ngưỡng nhiệt'},
-      {'key': 'MinPhase', 'displayName': 'Pha min'},
-      {'key': 'TwoArea', 'displayName': 'Phần tử cùng loại'},
-      {'key': 'GlobalMinPhase', 'displayName': 'Pha min toàn trạm'},
-      {'key': 'GlobalTwoArea', 'displayName': 'Phần tử cùng loại toàn trạm'},
-    ];
-  }
-
-  List<Map<String, String>> _getAvailableComparisonTypes(List<Map<String, dynamic>> tableData) {
-    print('🔍 _getAvailableComparisonTypes: tableData length = ${tableData.length}');
-
-    if (tableData.isEmpty) {
-      print('⚠️ _getAvailableComparisonTypes: tableData is empty');
-      return [];
-    }
-
-    final allTypes = _getComparisonTypes();
-    final availableTypes = <Map<String, String>>[];
-
-    // Check each comparison type to see if it has data
-    for (final type in allTypes) {
-      final key = type['key']!;
-      final configKey = '${key.toLowerCase()}Config';
-
-      // Check if any row has data for this comparison type
-      final hasData = tableData.any((row) => row[configKey] != null);
-      print('   - ${type['displayName']}: hasData = $hasData');
-
-      if (hasData) {
-        availableTypes.add(type);
-      }
-    }
-
-    print(
-      '📊 Available comparison types: ${availableTypes.map((t) => t['displayName']).join(", ")}',
-    );
-    return availableTypes;
+  void _updateTableData(
+    List<Map<String, dynamic>> tableData,
+    List<Map<String, String>> availableTypes,
+  ) {
+    setState(() {
+      _tableData = tableData;
+      _availableTypes = availableTypes;
+    });
   }
 
   Map<String, dynamic> _getEvaluationConfig(int id) {
@@ -606,11 +509,13 @@ class _TemperatureStatsTable extends StatefulWidget {
   final List<DeviceItem> devices;
   final TemperatureStatsFilter filter;
   final Function(int evaluationId, String? comparisonType) onPieChartFilterApplied;
+  final Function(List<Map<String, dynamic>>, List<Map<String, String>>)? onDataUpdated;
 
   const _TemperatureStatsTable({
     required this.devices,
     required this.filter,
     required this.onPieChartFilterApplied,
+    this.onDataUpdated,
   });
 
   @override
@@ -623,7 +528,10 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
   final ScrollController _tableHorizontalController = ScrollController();
   final ScrollController _tableVerticalController = ScrollController();
   Timer? _refreshTimer;
+  Timer? _debounceTimer;
   bool _isInitialLoad = true;
+  List<Map<String, dynamic>> _cachedTableData = [];
+  bool _hasLoggedInitialData = false;
 
   @override
   void initState() {
@@ -653,29 +561,8 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
 
         // Listen to bloc state changes
         bloc.stream.listen((state) {
-          if (mounted && state is RealTimeThermalLoaded) {
-            if (_isInitialLoad) {
-              // Initial load - rebuild normally
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) {
-                  setState(() {
-                    _isInitialLoad = false;
-                  });
-                }
-              });
-            } else {
-              // Auto-refresh - preserve scroll position
-              final scrollOffset = _scrollController.hasClients ? _scrollController.offset : 0.0;
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) {
-                  setState(() {});
-                  // Restore scroll position after rebuild
-                  if (_scrollController.hasClients) {
-                    _scrollController.jumpTo(scrollOffset);
-                  }
-                }
-              });
-            }
+          if (mounted) {
+            _onStateChanged(state);
           }
         });
       }
@@ -692,8 +579,8 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
   }
 
   void _startAutoRefresh() {
-    // Refresh data every 60 seconds
-    _refreshTimer = Timer.periodic(const Duration(seconds: 60), (timer) {
+    // Refresh data every 5 minutes (300 seconds) to reduce API calls
+    _refreshTimer = Timer.periodic(const Duration(seconds: 300), (timer) {
       if (mounted) {
         print('🔄 Auto-refreshing thermal data...');
         _refreshData();
@@ -726,9 +613,49 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
     _refreshData();
   }
 
+  void _onStateChanged(dynamic state) {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 500), () {
+      if (mounted) {
+        if (state is RealTimeThermalLoaded) {
+          if (_isInitialLoad) {
+            // Initial load - rebuild normally
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                setState(() {
+                  _isInitialLoad = false;
+                });
+              }
+            });
+          } else {
+            // Auto-refresh - only rebuild if data actually changed
+            final currentData = _getTableData();
+            if (currentData.length != _cachedTableData.length) {
+              print('🔄 Data changed: ${_cachedTableData.length} → ${currentData.length} rows');
+              final scrollOffset = _scrollController.hasClients ? _scrollController.offset : 0.0;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  setState(() {});
+                  // Restore scroll position after rebuild
+                  if (_scrollController.hasClients) {
+                    _scrollController.jumpTo(scrollOffset);
+                  }
+                }
+              });
+            }
+          }
+        } else if (state is RealTimeThermalLoading || state is RealTimeThermalError) {
+          // Don't rebuild when loading or error to avoid flickering
+          // Keep showing cached data
+        }
+      }
+    });
+  }
+
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    _debounceTimer?.cancel();
     _scrollController.dispose();
     _tableHorizontalController.dispose();
     _tableVerticalController.dispose();
@@ -785,14 +712,63 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
   @override
   Widget build(BuildContext context) {
     var tableData = _getTableData();
-    print('🔍 Original tableData length: ${tableData.length}');
+    // Remove all build-time logging to reduce spam
+
+    // Check loading/error states
+    final hasAnyLoading = _thermalBlocs.values.any((bloc) => bloc.state is RealTimeThermalLoading);
+    final hasAnyError = _thermalBlocs.values.any((bloc) => bloc.state is RealTimeThermalError);
+    final hasAnyLoaded = _thermalBlocs.values.any((bloc) => bloc.state is RealTimeThermalLoaded);
 
     // Apply filters
     tableData = _applyFilters(tableData);
-    print('🔍 Filtered tableData length: ${tableData.length}');
-    print('🔍 Current filter: ${widget.filter.hasActiveFilters}');
 
-    if (tableData.isEmpty) {
+    // Show loading indicator if we have no data and are loading
+    if (tableData.isEmpty && hasAnyLoading && !hasAnyLoaded) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(color: AppColors.secondary),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'Đang tải dữ liệu nhiệt độ...',
+              style: AppTextStyles.bodyLarge.copyWith(color: AppColors.textSecondary),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Show error message if we have errors and no cached data
+    if (tableData.isEmpty && hasAnyError && !hasAnyLoaded && _cachedTableData.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 64, color: AppColors.error),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'Lỗi tải dữ liệu nhiệt độ',
+              style: AppTextStyles.bodyLarge.copyWith(color: AppColors.error),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Vui lòng kiểm tra kết nối mạng và thử lại',
+              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            ElevatedButton.icon(
+              onPressed: _manualRefresh,
+              icon: Icon(Icons.refresh),
+              label: Text('Thử lại'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Show no data message only if we truly have no data (not loading, not error, no cache)
+    if (tableData.isEmpty && !hasAnyLoading && !hasAnyError) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -822,6 +798,13 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
     }
 
     // statistics and availableTypes are now calculated inline to use original data
+    final originalData = _getTableData();
+    final availableTypes = _getAvailableComparisonTypes(originalData);
+
+    // Notify parent about data updates
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onDataUpdated?.call(originalData, availableTypes);
+    });
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -833,15 +816,13 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
               children: [
                 // Statistics Cards
                 _StatisticsCards(
-                  statistics: _calculateStatistics(_getTableData()),
+                  statistics: _calculateStatistics(originalData),
                 ), // Use original data, not filtered
                 const SizedBox(height: AppSpacing.md),
                 // Pie Charts
                 _ComparisonPieCharts(
-                  tableData: _getTableData(), // Use original data, not filtered
-                  availableTypes: _getAvailableComparisonTypes(
-                    _getTableData(),
-                  ), // Use original data
+                  tableData: originalData, // Use original data, not filtered
+                  availableTypes: availableTypes, // Use original data
                   onFilterApplied: widget.onPieChartFilterApplied,
                   currentFilter: widget.filter,
                 ),
@@ -1241,21 +1222,27 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
   List<Map<String, dynamic>> _getTableData() {
     final List<Map<String, dynamic>> data = [];
     final comparisonTypes = _getComparisonTypes();
+    bool hasAnyValidData = false;
 
-    print('🔍 _getTableData: Processing ${widget.devices.length} devices');
+    // Only log on first successful data load
+    bool shouldLog = !_hasLoggedInitialData && data.isNotEmpty;
+    if (shouldLog) {
+      print('🔍 _getTableData: Processing ${widget.devices.length} devices');
+    }
 
     for (final device in widget.devices) {
       if (device.deviceType != 'Machine') continue;
 
       final bloc = _thermalBlocs[device.key];
       if (bloc == null) {
-        print('⚠️ No bloc found for device: ${device.name}');
+        if (shouldLog) print('⚠️ No bloc found for device: ${device.name}');
         continue;
       }
 
       final state = bloc.state;
       if (state is RealTimeThermalLoaded) {
-        print('✅ Device ${device.name}: ${state.data.data.length} components');
+        hasAnyValidData = true;
+        if (shouldLog) print('✅ Device ${device.name}: ${state.data.data.length} components');
         final componentKeys = state.data.data.keys.toList()..sort();
 
         for (final componentKey in componentKeys) {
@@ -1299,13 +1286,30 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
           data.add(rowData);
         }
       } else {
-        print(
-          '⚠️ Device ${device.name}: State is not RealTimeThermalLoaded (${state.runtimeType})',
-        );
+        if (shouldLog) {
+          print(
+            '⚠️ Device ${device.name}: State is not RealTimeThermalLoaded (${state.runtimeType})',
+          );
+        }
       }
     }
 
-    print('🔍 _getTableData result: ${data.length} rows');
+    // Update cache if we have valid data
+    if (hasAnyValidData && data.isNotEmpty) {
+      _cachedTableData = List.from(data);
+      if (!_hasLoggedInitialData) {
+        print('💾 Updated cache with ${_cachedTableData.length} rows');
+        _hasLoggedInitialData = true;
+      }
+    }
+
+    // If no new data but we have cached data, return cached data
+    if (data.isEmpty && _cachedTableData.isNotEmpty) {
+      if (shouldLog) print('🔄 Using cached data: ${_cachedTableData.length} rows');
+      return _cachedTableData;
+    }
+
+    if (shouldLog) print('🔍 _getTableData result: ${data.length} rows');
     return data;
   }
 
