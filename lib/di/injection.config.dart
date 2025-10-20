@@ -19,17 +19,29 @@ import 'package:flutter_camera/data/local/preference/pin_camera_preference.dart'
 import 'package:flutter_camera/data/local/preference/selected_cameras_preference.dart'
     as _i547;
 import 'package:flutter_camera/data/network/api/area_api_service.dart' as _i990;
+import 'package:flutter_camera/data/network/api/area_devices_api_service.dart'
+    as _i1036;
+import 'package:flutter_camera/data/network/api/area_map_api_service.dart'
+    as _i856;
 import 'package:flutter_camera/data/network/api/auth_api_service.dart' as _i531;
 import 'package:flutter_camera/data/network/api/camera_control_api_service.dart'
     as _i951;
 import 'package:flutter_camera/data/network/api/camera_stream_api_service.dart'
     as _i174;
+import 'package:flutter_camera/data/network/api/common_enums_api_service.dart'
+    as _i947;
 import 'package:flutter_camera/data/network/api/notification_api_service.dart'
     as _i678;
+import 'package:flutter_camera/data/network/api/real_time_thermal_api_service.dart'
+    as _i166;
 import 'package:flutter_camera/data/network/api/user_token_api_service.dart'
     as _i1045;
 import 'package:flutter_camera/data/network/api/vision_notification_api_service.dart'
     as _i827;
+import 'package:flutter_camera/data/network/repositories/area_devices_repository_impl.dart'
+    as _i819;
+import 'package:flutter_camera/data/network/repositories/area_map_repository_impl.dart'
+    as _i828;
 import 'package:flutter_camera/data/network/repositories/area_repository_impl.dart'
     as _i964;
 import 'package:flutter_camera/data/network/repositories/auth_repository_impl.dart'
@@ -40,14 +52,22 @@ import 'package:flutter_camera/data/network/repositories/camera_stream_repositor
     as _i299;
 import 'package:flutter_camera/data/network/repositories/notification_repository_impl.dart'
     as _i761;
+import 'package:flutter_camera/data/network/repositories/real_time_thermal_repository_impl.dart'
+    as _i1007;
 import 'package:flutter_camera/data/network/repositories/vision_notifications_repository_impl.dart'
     as _i952;
+import 'package:flutter_camera/data/services/common_enums_service.dart'
+    as _i253;
 import 'package:flutter_camera/data/services/firebase_messaging_service.dart'
     as _i935;
 import 'package:flutter_camera/data/services/screenshot_service.dart' as _i170;
 import 'package:flutter_camera/data/services/stream_server_service.dart'
     as _i793;
 import 'package:flutter_camera/di/injection.dart' as _i995;
+import 'package:flutter_camera/domain/repositories/area_devices_repository.dart'
+    as _i627;
+import 'package:flutter_camera/domain/repositories/area_map_repository.dart'
+    as _i719;
 import 'package:flutter_camera/domain/repositories/area_repository.dart'
     as _i170;
 import 'package:flutter_camera/domain/repositories/auth_repository.dart'
@@ -58,10 +78,16 @@ import 'package:flutter_camera/domain/repositories/camera_stream_repository.dart
     as _i39;
 import 'package:flutter_camera/domain/repositories/notifications_repository.dart'
     as _i819;
+import 'package:flutter_camera/domain/repositories/real_time_thermal_repository.dart'
+    as _i464;
 import 'package:flutter_camera/domain/repositories/vision_notifications_repository.dart'
     as _i983;
 import 'package:flutter_camera/domain/usecase/area/get_all_tree_use_case.dart'
     as _i203;
+import 'package:flutter_camera/domain/usecase/area/get_area_devices_use_case.dart'
+    as _i519;
+import 'package:flutter_camera/domain/usecase/area/get_area_map_use_case.dart'
+    as _i973;
 import 'package:flutter_camera/domain/usecase/auth/check_auth_status_usecase.dart'
     as _i1064;
 import 'package:flutter_camera/domain/usecase/auth/get_profile_use_case.dart'
@@ -82,13 +108,21 @@ import 'package:flutter_camera/domain/usecase/notification/get_notification_deta
     as _i999;
 import 'package:flutter_camera/domain/usecase/notification/get_notifications_use_case.dart'
     as _i362;
+import 'package:flutter_camera/domain/usecase/thermal/get_real_time_thermal_data_use_case.dart'
+    as _i545;
 import 'package:flutter_camera/domain/usecase/vision_notification/get_vision_notifications_use_case.dart'
     as _i527;
+import 'package:flutter_camera/presentation/bloc/area_devices/area_devices_bloc.dart'
+    as _i489;
+import 'package:flutter_camera/presentation/bloc/area_map/area_map_bloc.dart'
+    as _i828;
 import 'package:flutter_camera/presentation/bloc/auth/auth_bloc.dart' as _i649;
 import 'package:flutter_camera/presentation/bloc/camera_control/camera_control_bloc.dart'
     as _i470;
 import 'package:flutter_camera/presentation/bloc/camera_stream/camera_stream_bloc.dart'
     as _i295;
+import 'package:flutter_camera/presentation/bloc/real_time_thermal/real_time_thermal_bloc.dart'
+    as _i621;
 import 'package:flutter_camera/presentation/ui/device/bloc/device_bloc.dart'
     as _i840;
 import 'package:flutter_camera/presentation/ui/notification/bloc/notification_bloc.dart'
@@ -140,8 +174,32 @@ extension GetItInjectableX on _i174.GetIt {
         gh<_i183.AuthLocalPreference>(),
       ),
     );
+    gh.factory<_i1036.AreaDevicesApiService>(
+      () => _i1036.AreaDevicesApiService(
+        gh<_i361.Dio>(),
+        gh<_i183.AuthLocalPreference>(),
+      ),
+    );
+    gh.factory<_i166.RealTimeThermalApiService>(
+      () => _i166.RealTimeThermalApiService(
+        gh<_i361.Dio>(),
+        gh<_i183.AuthLocalPreference>(),
+      ),
+    );
     gh.factory<_i1045.UserTokenApiService>(
       () => _i1045.UserTokenApiService(
+        gh<_i361.Dio>(),
+        gh<_i183.AuthLocalPreference>(),
+      ),
+    );
+    gh.factory<_i856.AreaMapApiService>(
+      () => _i856.AreaMapApiService(
+        gh<_i361.Dio>(),
+        gh<_i183.AuthLocalPreference>(),
+      ),
+    );
+    gh.factory<_i947.CommonEnumsApiService>(
+      () => _i947.CommonEnumsApiService(
         gh<_i361.Dio>(),
         gh<_i183.AuthLocalPreference>(),
       ),
@@ -155,6 +213,18 @@ extension GetItInjectableX on _i174.GetIt {
     gh.factory<_i827.VisionNotificationApiService>(
       () => _i827.VisionNotificationApiService(
         gh<_i361.Dio>(),
+        gh<_i183.AuthLocalPreference>(),
+      ),
+    );
+    gh.lazySingleton<_i253.CommonEnumsService>(
+      () => _i253.CommonEnumsService(
+        gh<_i947.CommonEnumsApiService>(),
+        gh<_i183.AuthLocalPreference>(),
+      ),
+    );
+    gh.factory<_i719.AreaMapRepository>(
+      () => _i828.AreaMapRepositoryImpl(
+        gh<_i856.AreaMapApiService>(),
         gh<_i183.AuthLocalPreference>(),
       ),
     );
@@ -215,6 +285,9 @@ extension GetItInjectableX on _i174.GetIt {
       () =>
           _i299.CameraStreamRepositoryImpl(gh<_i174.CameraStreamApiService>()),
     );
+    gh.factory<_i973.GetAreaMapUseCase>(
+      () => _i973.GetAreaMapUseCase(gh<_i719.AreaMapRepository>()),
+    );
     gh.factory<_i999.GetNotificationDetailUseCase>(
       () => _i999.GetNotificationDetailUseCase(
         gh<_i819.NotificationsRepository>(),
@@ -222,6 +295,18 @@ extension GetItInjectableX on _i174.GetIt {
     );
     gh.factory<_i362.GetNotificationsUseCase>(
       () => _i362.GetNotificationsUseCase(gh<_i819.NotificationsRepository>()),
+    );
+    gh.factory<_i627.AreaDevicesRepository>(
+      () => _i819.AreaDevicesRepositoryImpl(
+        gh<_i1036.AreaDevicesApiService>(),
+        gh<_i183.AuthLocalPreference>(),
+      ),
+    );
+    gh.lazySingleton<_i464.RealTimeThermalRepository>(
+      () => _i1007.RealTimeThermalRepositoryImpl(
+        gh<_i166.RealTimeThermalApiService>(),
+        gh<_i183.AuthLocalPreference>(),
+      ),
     );
     gh.factory<_i470.CameraControlBloc>(
       () => _i470.CameraControlBloc(gh<_i1006.CameraControlUseCase>()),
@@ -242,6 +327,9 @@ extension GetItInjectableX on _i174.GetIt {
         getNotificationDetailUseCase: gh<_i999.GetNotificationDetailUseCase>(),
         authLocalPreference: gh<_i183.AuthLocalPreference>(),
       ),
+    );
+    gh.factory<_i828.AreaMapBloc>(
+      () => _i828.AreaMapBloc(gh<_i973.GetAreaMapUseCase>()),
     );
     gh.factory<_i392.GetStoredTokensUseCase>(
       () => _i392.GetStoredTokensUseCase(gh<_i88.AuthRepository>()),
@@ -272,6 +360,14 @@ extension GetItInjectableX on _i174.GetIt {
         authLocalPreference: gh<_i183.AuthLocalPreference>(),
       ),
     );
+    gh.factory<_i545.GetRealTimeThermalDataUseCase>(
+      () => _i545.GetRealTimeThermalDataUseCase(
+        gh<_i464.RealTimeThermalRepository>(),
+      ),
+    );
+    gh.factory<_i519.GetAreaDevicesUseCase>(
+      () => _i519.GetAreaDevicesUseCase(gh<_i627.AreaDevicesRepository>()),
+    );
     gh.factory<_i840.DeviceBloc>(
       () => _i840.DeviceBloc(gh<_i203.GetAllTreeUseCase>()),
     );
@@ -286,6 +382,13 @@ extension GetItInjectableX on _i174.GetIt {
     );
     gh.factory<_i315.GetProfileUseCase>(
       () => _i315.GetProfileUseCase(gh<_i88.AuthRepository>()),
+    );
+    gh.factory<_i489.AreaDevicesBloc>(
+      () => _i489.AreaDevicesBloc(gh<_i519.GetAreaDevicesUseCase>()),
+    );
+    gh.factory<_i621.RealTimeThermalBloc>(
+      () =>
+          _i621.RealTimeThermalBloc(gh<_i545.GetRealTimeThermalDataUseCase>()),
     );
     gh.factory<_i649.AuthBloc>(
       () => _i649.AuthBloc(

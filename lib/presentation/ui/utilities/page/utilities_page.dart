@@ -251,25 +251,25 @@ class _TemperatureStatsViewState extends State<_TemperatureStatsView> {
                                 ),
                               ),
                               // View Details button
-                              IconButton(
-                                icon: Icon(Icons.table_chart, color: AppColors.secondary),
-                                onPressed: () {
-                                  // Get current filtered data
-                                  final filteredData = _getFilteredTableData();
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => TemperatureStatsPage(
-                                        area: widget.area,
-                                        tableData: filteredData,
-                                        availableTypes: _availableTypes,
-                                        filter: _filter,
-                                      ),
-                                    ),
-                                  );
-                                },
-                                tooltip: 'Xem chi tiết bảng',
-                              ),
+                              // IconButton(
+                              //   icon: Icon(Icons.table_chart, color: AppColors.secondary),
+                              //   onPressed: () {
+                              //     // Get current filtered data
+                              //     final filteredData = _getFilteredTableData();
+                              //     Navigator.push(
+                              //       context,
+                              //       MaterialPageRoute(
+                              //         builder: (context) => TemperatureStatsPage(
+                              //           area: widget.area,
+                              //           tableData: filteredData,
+                              //           availableTypes: _availableTypes,
+                              //           filter: _filter,
+                              //         ),
+                              //       ),
+                              //     );
+                              //   },
+                              //   tooltip: 'Xem chi tiết bảng',
+                              // ),
                               // Filter button
                               Stack(
                                 children: [
@@ -325,27 +325,27 @@ class _TemperatureStatsViewState extends State<_TemperatureStatsView> {
                                 ),
                               ),
                               // View Details button
-                              IconButton(
-                                icon: Icon(Icons.table_chart, color: AppColors.secondary, size: 20),
-                                onPressed: () {
-                                  // Get current filtered data
-                                  final filteredData = _getFilteredTableData();
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => TemperatureStatsPage(
-                                        area: widget.area,
-                                        tableData: filteredData,
-                                        availableTypes: _availableTypes,
-                                        filter: _filter,
-                                      ),
-                                    ),
-                                  );
-                                },
-                                tooltip: 'Xem chi tiết bảng',
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(),
-                              ),
+                              // IconButton(
+                              //   icon: Icon(Icons.table_chart, color: AppColors.secondary, size: 20),
+                              //   onPressed: () {
+                              //     // Get current filtered data
+                              //     final filteredData = _getFilteredTableData();
+                              //     Navigator.push(
+                              //       context,
+                              //       MaterialPageRoute(
+                              //         builder: (context) => TemperatureStatsPage(
+                              //           area: widget.area,
+                              //           tableData: filteredData,
+                              //           availableTypes: _availableTypes,
+                              //           filter: _filter,
+                              //         ),
+                              //       ),
+                              //     );
+                              //   },
+                              //   tooltip: 'Xem chi tiết bảng',
+                              //   padding: EdgeInsets.zero,
+                              //   constraints: const BoxConstraints(),
+                              // ),
                               // Filter button
                               Stack(
                                 children: [
@@ -379,6 +379,47 @@ class _TemperatureStatsViewState extends State<_TemperatureStatsView> {
                             ],
                           ),
                         ),
+                      // View details button above table (uses parent state data)
+                      // Align(
+                      //   alignment: Alignment.centerRight,
+                      //   child: Padding(
+                      //     padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                      //     child: InkWell(
+                      //       onTap: () {
+                      //         final filteredData = _getFilteredTableData();
+                      //         Navigator.push(
+                      //           context,
+                      //           MaterialPageRoute(
+                      //             builder: (context) => TemperatureStatsPage(
+                      //               area: widget.area,
+                      //               tableData: filteredData,
+                      //               availableTypes: _availableTypes,
+                      //               filter: _filter,
+                      //             ),
+                      //           ),
+                      //         );
+                      //       },
+                      //       child: Row(
+                      //         mainAxisSize: MainAxisSize.min,
+                      //         children: [
+                      //           Text(
+                      //             'Xem chi tiết',
+                      //             style: AppTextStyles.bodyMedium.copyWith(
+                      //               color: AppColors.textPrimary,
+                      //             ),
+                      //           ),
+                      //           const SizedBox(width: 6),
+                      //           Icon(
+                      //             Icons.arrow_forward_ios,
+                      //             size: 16,
+                      //             color: AppColors.textPrimary,
+                      //           ),
+                      //         ],
+                      //       ),
+                      //     ),
+                      //   ),
+                      // ),
+                      const SizedBox(height: AppSpacing.sm),
                       // Temperature stats table
                       Expanded(
                         child: RefreshIndicator(
@@ -396,6 +437,7 @@ class _TemperatureStatsViewState extends State<_TemperatureStatsView> {
                             onPageChanged: (pageIndex, comparisonType) {
                               // This will be handled by the pie charts
                             },
+                            area: widget.area,
                           ),
                         ),
                       ),
@@ -482,6 +524,7 @@ class _TemperatureStatsTable extends StatefulWidget {
   final Function(List<Map<String, dynamic>>, List<Map<String, String>>)? onDataUpdated;
   final Function(List<Map<String, dynamic>>)? onFilteredDataUpdated;
   final Function(int pageIndex, String? comparisonType)? onPageChanged;
+  final AreaMapItem area; // Add area parameter
 
   const _TemperatureStatsTable({
     required this.devices,
@@ -490,6 +533,7 @@ class _TemperatureStatsTable extends StatefulWidget {
     this.onDataUpdated,
     this.onFilteredDataUpdated,
     this.onPageChanged,
+    required this.area,
   });
 
   @override
@@ -666,7 +710,7 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
     }
     final avgEnvTemp = envCount > 0 ? (envTempSum / envCount).toStringAsFixed(1) : '-';
 
-    // Find max and min current temperature with device names
+    // Find max and min current temperature with device names and point names
     double maxTemp = double.negativeInfinity;
     double minTemp = double.infinity;
     String maxDevice = '';
@@ -674,13 +718,16 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
 
     for (final row in tableData) {
       final current = double.tryParse(row['current'] ?? '0') ?? 0;
+      final deviceName = row['deviceName'] ?? '';
+      final pointName = row['pointName'] ?? '';
+
       if (current > maxTemp) {
         maxTemp = current;
-        maxDevice = row['deviceName'] ?? '';
+        maxDevice = '$deviceName - $pointName';
       }
       if (current < minTemp) {
         minTemp = current;
-        minDevice = row['deviceName'] ?? '';
+        minDevice = '$deviceName - $pointName';
       }
     }
 
@@ -820,19 +867,65 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
                   },
                 ),
                 const SizedBox(height: AppSpacing.md),
+                // Button xem chi tiết ngay phía trên table (bên phải)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      InkWell(
+                        onTap: () {
+                          final filteredData = tableData; // use current displayed data
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => TemperatureStatsPage(
+                                area: widget.area,
+                                tableData: filteredData,
+                                availableTypes: _getAvailableComparisonTypes(filteredData),
+                                filter: widget.filter,
+                              ),
+                            ),
+                          );
+                        },
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Xem chi tiết',
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Icon(Icons.arrow_forward_ios, size: 16, color: AppColors.textPrimary),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
                 // Temperature Table - fixed height
                 SizedBox(
                   height: constraints.maxHeight * 0.8, // 80% of screen height
                   child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md,
+                      vertical: AppSpacing.sm,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.surface,
                       borderRadius: BorderRadius.circular(AppBorderRadius.medium),
                       border: Border.all(color: AppColors.border, width: 0.5),
                     ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(AppBorderRadius.small),
-                      child: _buildSfDataGridTable(tableData),
+                    child: Column(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(AppBorderRadius.small),
+                          child: _buildSfDataGridTable(tableData),
+                        ),
+                      ],
                     ),
                   ),
                 ),

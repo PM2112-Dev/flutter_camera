@@ -17,16 +17,22 @@ class LogoutUseCase {
     // (regardless of API result - even if API fails, we still want to clear local tokens)
     final clearResult = await _repository.clearTokens();
 
-    // If logout API failed, return that error
-    if (logoutResult.isLeft()) {
-      return logoutResult;
+    // Priority: Local token clearing is more important than server logout
+    // If token clearing succeeds, consider logout successful even if API failed
+    if (clearResult.isRight()) {
+      // Local tokens cleared successfully
+      if (logoutResult.isLeft()) {
+        print('⚠️ Logout API failed but local tokens cleared successfully');
+      }
+      return const Right(null);
     }
 
-    // If clear failed, return that error
+    // If token clearing failed, return that error (this is critical)
     if (clearResult.isLeft()) {
       return clearResult;
     }
 
+    // If both succeeded, return success
     return const Right(null);
   }
 }

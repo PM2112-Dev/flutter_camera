@@ -1,6 +1,9 @@
 abstract class Failure {
   final String message;
   const Failure(this.message);
+
+  @override
+  String toString() => message;
 }
 
 class ServerFailure extends Failure {
@@ -9,21 +12,21 @@ class ServerFailure extends Failure {
 }
 
 class NetworkFailure extends Failure {
-  const NetworkFailure(String message) : super(message);
+  const NetworkFailure(super.message);
 }
 
 class CacheFailure extends Failure {
-  const CacheFailure(String message) : super(message);
+  const CacheFailure(super.message);
 }
 
 class UnknownFailure extends Failure {
-  const UnknownFailure(String message) : super(message);
+  const UnknownFailure(super.message);
 }
 
 class ValidationFailure extends Failure {
-  const ValidationFailure(String message) : super(message);
+  const ValidationFailure(super.message);
 }
 
 class AuthenticationFailure extends Failure {
-  const AuthenticationFailure(String message) : super(message);
+  const AuthenticationFailure(super.message);
 }

@@ -30,11 +30,9 @@ abstract class RegisterModule {
   );
 
   @lazySingleton
-  PinCameraPreference pinCameraPreference(SharedPreferences prefs) =>
-      PinCameraPreference(prefs);
+  PinCameraPreference pinCameraPreference(SharedPreferences prefs) => PinCameraPreference(prefs);
 
   @lazySingleton
-  SelectedCamerasPreference selectedCamerasPreference(
-    SharedPreferences prefs,
-  ) => SelectedCamerasPreference(prefs);
+  SelectedCamerasPreference selectedCamerasPreference(SharedPreferences prefs) =>
+      SelectedCamerasPreference(prefs);
 }

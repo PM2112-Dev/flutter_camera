@@ -2,6 +2,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_camera/data/services/common_enums_service.dart';
 import 'package:flutter_camera/di/injection.dart';
 import 'package:flutter_camera/firebase_options.dart';
 import 'package:flutter_camera/presentation/bloc/auth/auth_bloc.dart';
@@ -13,12 +14,12 @@ import 'package:flutter_camera/presentation/ui/login/page/login_page.dart';
 import 'package:flutter_camera/presentation/ui/notification/pages/notification_detail_page.dart';
 import 'package:flutter_camera/presentation/ui/shared/design_system.dart';
 
-// Global navigator key for navigation from anywhere
+// Global navigator key for navigation from services
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+  // await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
   // Initialize Firebase only if not already initialized
   try {
@@ -31,7 +32,22 @@ void main() async {
   }
 
   await configureDependencies();
+
+  // Pre-load common enums for better UX
+  _preloadCommonEnums();
+
   runApp(MyApp());
+}
+
+void _preloadCommonEnums() async {
+  try {
+    final enumsService = getIt<CommonEnumsService>();
+    await enumsService.getAllEnums();
+    print('✅ Common enums pre-loaded successfully');
+  } catch (e) {
+    print('⚠️ Failed to pre-load common enums: $e');
+    // Continue anyway, will load when needed
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -40,24 +56,28 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       title: 'MTKVision',
       theme: AppTheme.lightTheme,
+      navigatorKey: navigatorKey, // Add global navigator key
       home: const AppInitializer(),
       routes: routes,
       onGenerateRoute: (settings) {
-        // Handle routes that require parameters
-        if (settings.name == AppRoutes.notificationDetail) {
-          final args = settings.arguments as Map<String, String>;
-          return MaterialPageRoute(
-            builder: (_) => NotificationDetailPage(
-              notificationId: args['id'] ?? '',
-              dataTime: args['dataTime'] ?? '',
-            ),
-          );
+        // Handle routes that require arguments
+        switch (settings.name) {
+          case AppRoutes.notificationDetail:
+            final args = settings.arguments as Map<String, dynamic>?;
+            if (args != null && args.containsKey('id') && args.containsKey('dataTime')) {
+              return MaterialPageRoute(
+                builder: (_) => NotificationDetailPage(
+                  notificationId: args['id'] as String,
+                  dataTime: args['dataTime'] as String,
+                ),
+              );
+            }
+            break;
         }
-        return null;
+        return null; // Let MaterialApp handle other routes
       },
     );
   }

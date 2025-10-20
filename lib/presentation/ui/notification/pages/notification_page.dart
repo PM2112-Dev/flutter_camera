@@ -1,22 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_camera/data/network/model/vision_notification_list_request.dart';
+import 'package:flutter_camera/data/network/model/vision_notification_list_response.dart';
 import 'package:flutter_camera/di/injection.dart';
 import 'package:flutter_camera/data/local/preference/auth_local_preference.dart';
 import 'package:flutter_camera/presentation/ui/shared/design_system.dart';
 import 'package:flutter_camera/presentation/ui/notification/pages/notification_list_page.dart';
 import 'package:flutter_camera/presentation/ui/notification/pages/ai_notification_detail_page.dart';
+import 'package:flutter_camera/presentation/ui/notification/models/notification_filter.dart';
 import '../bloc/notification_bloc.dart';
 
 class NotificationPage extends StatefulWidget {
-  const NotificationPage({super.key});
+  final NotificationFilter filter;
+
+  const NotificationPage({super.key, required this.filter});
 
   @override
   State<NotificationPage> createState() => _NotificationPageState();
 }
 
-class _NotificationPageState extends State<NotificationPage>
-    with SingleTickerProviderStateMixin {
+class _NotificationPageState extends State<NotificationPage> with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
   @override
@@ -29,6 +32,37 @@ class _NotificationPageState extends State<NotificationPage>
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  List<dynamic> _applyAIFilter(List<dynamic> notifications) {
+    var filtered = notifications;
+
+    // Filter by time range (using alertTime for AI notifications)
+    if (widget.filter.startDate != null && widget.filter.endDate != null) {
+      filtered = filtered.where((item) {
+        if (item is! NotificationItem || item.alertTime == null) return false;
+        try {
+          final itemDate = DateTime.parse(item.alertTime!);
+          return itemDate.isAfter(widget.filter.startDate!.subtract(const Duration(days: 1))) &&
+              itemDate.isBefore(widget.filter.endDate!.add(const Duration(days: 1)));
+        } catch (e) {
+          return false;
+        }
+      }).toList();
+    }
+
+    // Filter by areaName (exact match - AI notifications only have areaName, no compareTypeObject or statusObject)
+    if (widget.filter.areaName != null && widget.filter.areaName!.isNotEmpty) {
+      filtered = filtered.where((item) {
+        if (item is! NotificationItem) return false;
+        return item.areaName == widget.filter.areaName;
+      }).toList();
+    }
+
+    // Note: AI notifications don't have compareTypeObject or statusObject,
+    // so we only filter by time and area
+
+    return filtered;
   }
 
   @override
@@ -194,7 +228,7 @@ class _NotificationPageState extends State<NotificationPage>
               controller: _tabController,
               children: [
                 // Tab 1: Cảnh báo nhiệt độ
-                const NotificationListPage(),
+                NotificationListPage(filter: widget.filter),
                 // Tab 2: Cảnh báo AI
                 _buildAIWarningTab(),
               ],
@@ -233,10 +267,21 @@ class _NotificationPageState extends State<NotificationPage>
         child: BlocBuilder<NotificationBloc, NotificationState>(
           builder: (context, state) {
             if (state is NotificationLoading) {
-              return AppWidgets.buildLoadingIndicator(
-                message: 'Loading AI warnings...',
-              );
+              return AppWidgets.buildLoadingIndicator(message: 'Loading AI warnings...');
             } else if (state is NotificationLoaded) {
+              final allNotifications = state.items;
+              final filteredNotifications = _applyAIFilter(allNotifications);
+
+              if (filteredNotifications.isEmpty) {
+                return AppWidgets.buildEmptyState(
+                  icon: Icons.smart_toy_outlined,
+                  title: allNotifications.isEmpty ? 'No AI warnings' : 'No matching notifications',
+                  subtitle: allNotifications.isEmpty
+                      ? 'There are no AI detection warnings at this time'
+                      : 'Try adjusting your filter criteria',
+                );
+              }
+
               return RefreshIndicator(
                 color: AppColors.primary,
                 onRefresh: () async {
@@ -261,24 +306,19 @@ class _NotificationPageState extends State<NotificationPage>
                 },
                 child: ListView.separated(
                   padding: const EdgeInsets.all(AppSpacing.md),
-                  itemCount: state.items.length,
-                  separatorBuilder: (_, __) =>
-                      const SizedBox(height: AppSpacing.sm),
+                  itemCount: filteredNotifications.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
                   itemBuilder: (context, index) {
-                    final item = state.items[index];
+                    final item = filteredNotifications[index] as NotificationItem;
                     return Container(
                       decoration: BoxDecoration(
                         color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(
-                          AppBorderRadius.medium,
-                        ),
+                        borderRadius: BorderRadius.circular(AppBorderRadius.medium),
                         boxShadow: AppShadows.cardShadow,
                         border: Border.all(color: AppColors.border, width: 0.5),
                       ),
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(
-                          AppBorderRadius.medium,
-                        ),
+                        borderRadius: BorderRadius.circular(AppBorderRadius.medium),
                         child: Material(
                           color: Colors.transparent,
                           child: InkWell(
@@ -287,9 +327,7 @@ class _NotificationPageState extends State<NotificationPage>
                                 context,
                                 MaterialPageRoute(
                                   builder: (context) =>
-                                      AINotificationDetailPage(
-                                        notification: item,
-                                      ),
+                                      AINotificationDetailPage(notification: item),
                                 ),
                               );
                             },
@@ -302,37 +340,26 @@ class _NotificationPageState extends State<NotificationPage>
                                     width: 60,
                                     height: 60,
                                     decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(
-                                        AppBorderRadius.small,
-                                      ),
-                                      border: Border.all(
-                                        color: AppColors.border,
-                                        width: 0.5,
-                                      ),
+                                      borderRadius: BorderRadius.circular(AppBorderRadius.small),
+                                      border: Border.all(color: AppColors.border, width: 0.5),
                                     ),
                                     child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(
-                                        AppBorderRadius.small,
-                                      ),
-                                      child: item.imagePath != null
+                                      borderRadius: BorderRadius.circular(AppBorderRadius.small),
+                                      child: item.imagePath != null && item.imagePath!.isNotEmpty
                                           ? Image.network(
-                                              item.imagePath,
+                                              item.imagePath!,
                                               fit: BoxFit.cover,
-                                              errorBuilder: (_, __, ___) =>
-                                                  Container(
-                                                    color: AppColors.error
-                                                        .withOpacity(0.1),
-                                                    child: const Icon(
-                                                      Icons.image_not_supported,
-                                                      color: AppColors.error,
-                                                      size: 24,
-                                                    ),
-                                                  ),
+                                              errorBuilder: (_, __, ___) => Container(
+                                                color: AppColors.error.withOpacity(0.1),
+                                                child: const Icon(
+                                                  Icons.image_not_supported,
+                                                  color: AppColors.error,
+                                                  size: 24,
+                                                ),
+                                              ),
                                             )
                                           : Container(
-                                              color: AppColors.info.withOpacity(
-                                                0.1,
-                                              ),
+                                              color: AppColors.info.withOpacity(0.1),
                                               child: const Icon(
                                                 Icons.smart_toy,
                                                 size: 28,
@@ -345,17 +372,14 @@ class _NotificationPageState extends State<NotificationPage>
                                   // Content
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          item.warningEventName ??
-                                              'AI Detection Alert',
-                                          style: AppTextStyles.bodyLarge
-                                              .copyWith(
-                                                fontWeight: FontWeight.w600,
-                                                color: AppColors.textPrimary,
-                                              ),
+                                          item.warningEventName ?? 'AI Detection Alert',
+                                          style: AppTextStyles.bodyLarge.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.textPrimary,
+                                          ),
                                           maxLines: 2,
                                           overflow: TextOverflow.ellipsis,
                                         ),
@@ -372,15 +396,11 @@ class _NotificationPageState extends State<NotificationPage>
                                               Expanded(
                                                 child: Text(
                                                   item.areaName!,
-                                                  style: AppTextStyles
-                                                      .bodyMedium
-                                                      .copyWith(
-                                                        color: AppColors
-                                                            .textSecondary,
-                                                      ),
+                                                  style: AppTextStyles.bodyMedium.copyWith(
+                                                    color: AppColors.textSecondary,
+                                                  ),
                                                   maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
+                                                  overflow: TextOverflow.ellipsis,
                                                 ),
                                               ),
                                             ],
@@ -396,11 +416,10 @@ class _NotificationPageState extends State<NotificationPage>
                                             const SizedBox(width: 4),
                                             Text(
                                               item.formattedDate ?? '',
-                                              style: AppTextStyles.bodySmall
-                                                  .copyWith(
-                                                    color: AppColors.textHint,
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
+                                              style: AppTextStyles.bodySmall.copyWith(
+                                                color: AppColors.textHint,
+                                                fontWeight: FontWeight.w500,
+                                              ),
                                             ),
                                           ],
                                         ),
@@ -409,16 +428,10 @@ class _NotificationPageState extends State<NotificationPage>
                                   ),
                                   // Arrow
                                   Container(
-                                    padding: const EdgeInsets.all(
-                                      AppSpacing.xs,
-                                    ),
+                                    padding: const EdgeInsets.all(AppSpacing.xs),
                                     decoration: BoxDecoration(
-                                      color: AppColors.primaryLight.withOpacity(
-                                        0.1,
-                                      ),
-                                      borderRadius: BorderRadius.circular(
-                                        AppBorderRadius.small,
-                                      ),
+                                      color: AppColors.primaryLight.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(AppBorderRadius.small),
                                     ),
                                     child: Icon(
                                       Icons.chevron_right,
@@ -436,12 +449,6 @@ class _NotificationPageState extends State<NotificationPage>
                   },
                 ),
               );
-            } else if (state is NotificationEmpty) {
-              return AppWidgets.buildEmptyState(
-                icon: Icons.smart_toy_outlined,
-                title: 'No AI warnings',
-                subtitle: 'There are no AI detection warnings at this time',
-              );
             } else if (state is NotificationError) {
               return Container(
                 padding: const EdgeInsets.all(AppSpacing.lg),
@@ -455,11 +462,7 @@ class _NotificationPageState extends State<NotificationPage>
                         color: AppColors.error.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(40),
                       ),
-                      child: Icon(
-                        Icons.wifi_off_outlined,
-                        size: 40,
-                        color: AppColors.error,
-                      ),
+                      child: Icon(Icons.wifi_off_outlined, size: 40, color: AppColors.error),
                     ),
                     const SizedBox(height: AppSpacing.lg),
                     Text(
@@ -484,12 +487,8 @@ class _NotificationPageState extends State<NotificationPage>
                       padding: const EdgeInsets.all(AppSpacing.sm),
                       decoration: BoxDecoration(
                         color: AppColors.error.withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(
-                          AppBorderRadius.medium,
-                        ),
-                        border: Border.all(
-                          color: AppColors.error.withOpacity(0.2),
-                        ),
+                        borderRadius: BorderRadius.circular(AppBorderRadius.medium),
+                        border: Border.all(color: AppColors.error.withOpacity(0.2)),
                       ),
                       child: Text(
                         'Chi tiết lỗi: ${state.message}',
@@ -543,16 +542,14 @@ class _NotificationPageState extends State<NotificationPage>
                                 title: const Text('Thông tin chi tiết'),
                                 content: SingleChildScrollView(
                                   child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Text(
                                         'API Endpoint:',
-                                        style: AppTextStyles.bodyMedium
-                                            .copyWith(
-                                              fontWeight: FontWeight.bold,
-                                            ),
+                                        style: AppTextStyles.bodyMedium.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
                                       Text(
                                         '${getIt<AuthLocalPreference>().getFullBaseUrl().isNotEmpty ? getIt<AuthLocalPreference>().getFullBaseUrl() : 'http://thermal.infosysvietnam.com.vn:10253'}/api/VisionNotifications/list',
@@ -564,10 +561,9 @@ class _NotificationPageState extends State<NotificationPage>
                                       const SizedBox(height: AppSpacing.sm),
                                       Text(
                                         'Lỗi:',
-                                        style: AppTextStyles.bodyMedium
-                                            .copyWith(
-                                              fontWeight: FontWeight.bold,
-                                            ),
+                                        style: AppTextStyles.bodyMedium.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
                                       Text(
                                         state.message,
