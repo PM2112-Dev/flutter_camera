@@ -53,6 +53,9 @@ class _TemperatureStatsTable extends StatelessWidget {
     print('   - tableData length: ${tableData.length}');
     print('   - availableTypes length: ${availableTypes.length}');
     print('   - filter: ${filter.hasActiveFilters}');
+    print(
+      '   - filter details: deviceNames=${filter.deviceNames}, evaluationId=${filter.evaluationId}, comparisonType=${filter.comparisonType}',
+    );
 
     if (tableData.isEmpty) {
       return const Center(
@@ -72,16 +75,17 @@ class _TemperatureStatsTable extends StatelessWidget {
       );
     }
 
-    return _buildSfDataGridTable(tableData);
+    return _buildSfDataGridTable(context, tableData);
   }
 
-  Widget _buildSfDataGridTable(List<Map<String, dynamic>> tableData) {
-    final dataSource = UtilitiesDataSource(tableData, availableTypes);
+  Widget _buildSfDataGridTable(BuildContext context, List<Map<String, dynamic>> tableData) {
+    // For temperature_stats_page, we always show all columns (like "Tổng hợp" view)
+    final dataSource = UtilitiesDataSource(tableData, availableTypes, 0, null);
 
     return SfDataGrid(
       source: dataSource,
       frozenColumnsCount: 1, // Ghim cột đầu tiên
-      columns: _buildSyncfusionColumns(availableTypes),
+      columns: _buildSyncfusionColumns(context, availableTypes),
       stackedHeaderRows: _buildStackedHeaders(availableTypes),
       gridLinesVisibility: GridLinesVisibility.both,
       headerGridLinesVisibility: GridLinesVisibility.both,
@@ -180,7 +184,10 @@ class _TemperatureStatsTable extends StatelessWidget {
     ];
   }
 
-  List<GridColumn> _buildSyncfusionColumns(List<Map<String, String>> availableTypes) {
+  List<GridColumn> _buildSyncfusionColumns(
+    BuildContext context,
+    List<Map<String, String>> availableTypes,
+  ) {
     final columns = <GridColumn>[];
 
     // Cột đầu tiên - Điểm đo (frozen) - Label sẽ được hiển thị trong stacked header
@@ -219,24 +226,14 @@ class _TemperatureStatsTable extends StatelessWidget {
         label: Container(
           padding: const EdgeInsets.all(8.0),
           alignment: Alignment.center,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.trending_up, size: 16, color: AppColors.secondary),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  'Max (°C)',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.secondary,
-                    fontSize: 12,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
+          child: Text(
+            'Max (°C)',
+            style: AppTextStyles.bodySmall.copyWith(
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFFD32F2F),
+              fontSize: 12,
+            ),
+            textAlign: TextAlign.center,
           ),
         ),
       ),
@@ -250,24 +247,14 @@ class _TemperatureStatsTable extends StatelessWidget {
         label: Container(
           padding: const EdgeInsets.all(8.0),
           alignment: Alignment.center,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.trending_down, size: 16, color: AppColors.secondary),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  'Min (°C)',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.secondary,
-                    fontSize: 12,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
+          child: Text(
+            'Min (°C)',
+            style: AppTextStyles.bodySmall.copyWith(
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF1976D2),
+              fontSize: 12,
+            ),
+            textAlign: TextAlign.center,
           ),
         ),
       ),
@@ -281,24 +268,14 @@ class _TemperatureStatsTable extends StatelessWidget {
         label: Container(
           padding: const EdgeInsets.all(8.0),
           alignment: Alignment.center,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.show_chart, size: 16, color: AppColors.secondary),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  'AVG (°C)',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.secondary,
-                    fontSize: 12,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
+          child: Text(
+            'AVG (°C)',
+            style: AppTextStyles.bodySmall.copyWith(
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF757575),
+              fontSize: 12,
+            ),
+            textAlign: TextAlign.center,
           ),
         ),
       ),
@@ -313,25 +290,27 @@ class _TemperatureStatsTable extends StatelessWidget {
         GridColumn(
           columnName: '${key.toLowerCase()}Temp',
           width: 100.0,
-          label: Container(
-            padding: const EdgeInsets.all(8.0),
-            alignment: Alignment.center,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
+          label: InkWell(
+            onTap: () => _showColumnInfoPopup(context, 'Nhiệt độ', _getTemperatureDescription(key)),
+            child: Stack(
               children: [
-                Icon(Icons.thermostat, size: 16, color: AppColors.secondary),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    'Nhiệt độ',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.secondary,
-                      fontSize: 12,
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.max,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.max,
+                      children: [Icon(Icons.thermostat, size: 16, color: const Color(0xFFF57C00))],
                     ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  ],
+                ),
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: Icon(Icons.info_outline, size: 12, color: AppColors.textSecondary),
                 ),
               ],
             ),
@@ -344,25 +323,29 @@ class _TemperatureStatsTable extends StatelessWidget {
         GridColumn(
           columnName: '${key.toLowerCase()}Delta',
           width: 100.0,
-          label: Container(
-            padding: const EdgeInsets.all(8.0),
-            alignment: Alignment.center,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
+          label: InkWell(
+            onTap: () => _showColumnInfoPopup(context, 'Chênh lệch', _getDeltaDescription(key)),
+            child: Stack(
               children: [
-                Icon(Icons.compare_arrows, size: 16, color: AppColors.secondary),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    'Chênh lệch',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.secondary,
-                      fontSize: 12,
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.max,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.max,
+                      children: [
+                        Icon(Icons.compare_arrows, size: 16, color: const Color(0xFF1976D2)),
+                      ],
                     ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  ],
+                ),
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: Icon(Icons.info_outline, size: 12, color: AppColors.textSecondary),
                 ),
               ],
             ),
@@ -375,25 +358,27 @@ class _TemperatureStatsTable extends StatelessWidget {
         GridColumn(
           columnName: '${key.toLowerCase()}Eval',
           width: 120.0,
-          label: Container(
-            padding: const EdgeInsets.all(8.0),
-            alignment: Alignment.center,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
+          label: InkWell(
+            onTap: () => _showColumnInfoPopup(context, 'Đánh giá', _getEvaluationDescription(key)),
+            child: Stack(
               children: [
-                Icon(Icons.assessment, size: 16, color: AppColors.secondary),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    'Đánh giá',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.secondary,
-                      fontSize: 12,
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.max,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.max,
+                      children: [Icon(Icons.assessment, size: 16, color: const Color(0xFF2E7D32))],
                     ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  ],
+                ),
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: Icon(Icons.info_outline, size: 12, color: AppColors.textSecondary),
                 ),
               ],
             ),
@@ -403,5 +388,105 @@ class _TemperatureStatsTable extends StatelessWidget {
     }
 
     return columns;
+  }
+
+  void _showColumnInfoPopup(BuildContext context, String title, String description) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppBorderRadius.medium),
+          ),
+          title: Row(
+            children: [
+              Icon(Icons.info_outline, color: AppColors.info, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: AppTextStyles.bodyLarge.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            description,
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(
+                'Đóng',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.info,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  String _getTemperatureDescription(String comparisonType) {
+    switch (comparisonType.toLowerCase()) {
+      case 'enviroment':
+        return 'Chênh lệch nhiệt độ so với môi trường';
+      case 'threshold':
+        return 'Chênh lệch nhiệt độ so với ngưỡng nhiệt độ';
+      case 'minphase':
+        return 'Chênh lệch nhiệt độ so với pha min';
+      case 'twoarea':
+        return 'Chênh lệch nhiệt độ so với phần tử cùng';
+      case 'globalminphase':
+        return 'Chênh lệch nhiệt độ so với pha min toàn trạm';
+      case 'globaltwoarea':
+        return 'Chênh lệch nhiệt độ so với phần tử cùng loại toàn trạm';
+      default:
+        return 'Chênh lệch nhiệt độ so với giá trị chuẩn';
+    }
+  }
+
+  String _getDeltaDescription(String comparisonType) {
+    switch (comparisonType.toLowerCase()) {
+      case 'enviroment':
+        return 'Chênh lệch nhiệt độ so với môi trường';
+      case 'threshold':
+        return 'Chênh lệch nhiệt độ so với ngưỡng nhiệt';
+      case 'minphase':
+        return 'Chênh lệch nhiệt độ so với pha min';
+      case 'twoarea':
+        return 'Chênh lệch nhiệt độ so với phần tử cùng loại';
+      case 'globalminphase':
+        return 'Chênh lệch nhiệt độ so với pha min toàn trạm';
+      case 'globaltwoarea':
+        return 'Chênh lệch nhiệt độ so với phần tử cùng loại toàn trạm';
+      default:
+        return 'Chênh lệch nhiệt độ so với giá trị chuẩn';
+    }
+  }
+
+  String _getEvaluationDescription(String comparisonType) {
+    switch (comparisonType.toLowerCase()) {
+      case 'enviroment':
+        return 'Đánh giá dựa trên so sánh với nhiệt độ môi trường';
+      case 'threshold':
+        return 'Đánh giá dựa trên so sánh với ngưỡng nhiệt độ';
+      case 'minphase':
+        return 'Đánh giá dựa trên so sánh với pha min';
+      case 'twoarea':
+        return 'Đánh giá dựa trên so sánh với phần tử cùng loại';
+      case 'globalminphase':
+        return 'Đánh giá dựa trên so sánh với pha min toàn trạm';
+      case 'globaltwoarea':
+        return 'Đánh giá dựa trên so sánh với phần tử cùng loại toàn trạm';
+      default:
+        return 'Đánh giá dựa trên so sánh với giá trị chuẩn';
+    }
   }
 }

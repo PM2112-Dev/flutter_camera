@@ -131,9 +131,14 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
         body: BlocConsumer<AuthBloc, AuthState>(
           listener: (context, state) {
             if (state is AuthError) {
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(SnackBar(content: Text(state.message), backgroundColor: Colors.red));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(_getUserFriendlyErrorMessage(state.message)),
+                  backgroundColor: Colors.red,
+                  duration: const Duration(seconds: 4),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
             } else if (state is AuthAuthenticated) {
               Navigator.of(context).pushReplacementNamed(AppRoutes.home);
             }
@@ -303,6 +308,9 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
           children: [
             const SizedBox(height: 16),
 
+            // Error message display
+            if (state is AuthError) _buildErrorMessage(state.message),
+
             CustomTextField(
               controller: _usernameController,
               label: 'Tên đăng nhập',
@@ -347,6 +355,75 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
         initialStreamConfig: _currentStreamConfig,
       ),
     );
+  }
+
+  Widget _buildErrorMessage(String message) {
+    // Convert technical error messages to user-friendly Vietnamese messages
+    String userFriendlyMessage = _getUserFriendlyErrorMessage(message);
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.red.shade50,
+        border: Border.all(color: Colors.red.shade300, width: 1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.error_outline, color: Colors.red.shade600, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              userFriendlyMessage,
+              style: TextStyle(
+                color: Colors.red.shade700,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getUserFriendlyErrorMessage(String technicalMessage) {
+    final message = technicalMessage.toLowerCase();
+
+    // Check for specific Vietnamese error messages first
+    if (message.contains('mật khẩu không đúng') || message.contains('mat khau khong dung')) {
+      return 'Mật khẩu không đúng. Vui lòng kiểm tra lại.';
+    } else if (message.contains('tên đăng nhập không đúng') ||
+        message.contains('ten dang nhap khong dung')) {
+      return 'Tên đăng nhập không đúng. Vui lòng kiểm tra lại.';
+    } else if (message.contains('tài khoản không tồn tại') ||
+        message.contains('tai khoan khong ton tai')) {
+      return 'Tài khoản không tồn tại. Vui lòng kiểm tra lại thông tin.';
+    }
+
+    // Check for HTTP status codes and technical messages
+    if (message.contains('unauthorized') || message.contains('401')) {
+      return 'Tên đăng nhập hoặc mật khẩu không đúng. Vui lòng kiểm tra lại.';
+    } else if (message.contains('forbidden') || message.contains('403')) {
+      return 'Tài khoản không có quyền truy cập. Liên hệ quản trị viên.';
+    } else if (message.contains('not found') || message.contains('404')) {
+      return 'Không tìm thấy tài khoản. Vui lòng kiểm tra lại thông tin.';
+    } else if (message.contains('bad request') || message.contains('400')) {
+      return 'Thông tin đăng nhập không hợp lệ. Vui lòng kiểm tra lại.';
+    } else if (message.contains('timeout') || message.contains('connection')) {
+      return 'Lỗi kết nối đến server. Vui lòng kiểm tra kết nối mạng và thử lại.';
+    } else if (message.contains('server') || message.contains('500')) {
+      return 'Lỗi server. Vui lòng thử lại sau ít phút.';
+    } else if (message.contains('network') || message.contains('internet')) {
+      return 'Không có kết nối internet. Vui lòng kiểm tra mạng và thử lại.';
+    } else if (message.contains('invalid') || message.contains('format')) {
+      return 'Thông tin đăng nhập không hợp lệ. Vui lòng kiểm tra lại.';
+    } else {
+      // Return original message if no specific pattern matches
+      return technicalMessage;
+    }
   }
 
   void _handleLogin() {

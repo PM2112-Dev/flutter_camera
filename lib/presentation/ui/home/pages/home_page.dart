@@ -218,13 +218,18 @@ class _HomePageState extends State<HomePage> {
     }
 
     // Clear camera stream data before logout to prevent conflicts
+    // Note: CameraStreamDataProvider is only available in DevicePage context,
+    // so we'll skip this step if not available - it will be cleared when navigating away
     try {
-      // Try to get streamDataProvider from context if available
+      // Check if provider is available in current context
       final streamDataProvider = context.read<CameraStreamDataProvider>();
       streamDataProvider.clearAllStreamData();
       print('✅ Camera stream data cleared');
     } catch (e) {
-      print('⚠️ Error clearing stream data (provider not available in this context): $e');
+      print(
+        'ℹ️ CameraStreamDataProvider not available in current context (this is normal during logout from HomePage)',
+      );
+      // This is expected behavior - the provider will be cleared when the user navigates away
     }
 
     // Close dialog

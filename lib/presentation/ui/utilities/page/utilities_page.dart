@@ -1,7 +1,5 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_camera/di/injection.dart';
 import 'package:flutter_camera/presentation/bloc/area_devices/area_devices_bloc.dart';
@@ -20,11 +18,10 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_camera/presentation/ui/utilities/page/temperature_stats_page.dart';
 import 'package:syncfusion_flutter_datagrid/datagrid.dart';
 
-// Temperature Stats Filter Model
 class TemperatureStatsFilter {
-  final List<String>? deviceNames; // Multiple device selection
+  final List<String>? deviceNames;
   final int? evaluationId;
-  final String? comparisonType; // Filter by comparison type (Enviroment, MinPhase, etc.)
+  final String? comparisonType;
   final String? sortBy;
   final bool sortDescending;
 
@@ -125,6 +122,7 @@ class _TemperatureStatsViewState extends State<_TemperatureStatsView> {
   final GlobalKey _filterButtonKey = GlobalKey();
   List<Map<String, dynamic>> _tableData = [];
   List<Map<String, String>> _availableTypes = [];
+  List<Map<String, dynamic>> _filteredTableData = [];
 
   void _applyPieChartFilter(int evaluationId, String? comparisonType) {
     setState(() {
@@ -256,12 +254,14 @@ class _TemperatureStatsViewState extends State<_TemperatureStatsView> {
                               IconButton(
                                 icon: Icon(Icons.table_chart, color: AppColors.secondary),
                                 onPressed: () {
+                                  // Get current filtered data
+                                  final filteredData = _getFilteredTableData();
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
                                       builder: (context) => TemperatureStatsPage(
                                         area: widget.area,
-                                        tableData: _tableData,
+                                        tableData: filteredData,
                                         availableTypes: _availableTypes,
                                         filter: _filter,
                                       ),
@@ -328,12 +328,14 @@ class _TemperatureStatsViewState extends State<_TemperatureStatsView> {
                               IconButton(
                                 icon: Icon(Icons.table_chart, color: AppColors.secondary, size: 20),
                                 onPressed: () {
+                                  // Get current filtered data
+                                  final filteredData = _getFilteredTableData();
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
                                       builder: (context) => TemperatureStatsPage(
                                         area: widget.area,
-                                        tableData: _tableData,
+                                        tableData: filteredData,
                                         availableTypes: _availableTypes,
                                         filter: _filter,
                                       ),
@@ -390,6 +392,10 @@ class _TemperatureStatsViewState extends State<_TemperatureStatsView> {
                             filter: _filter,
                             onPieChartFilterApplied: _applyPieChartFilter,
                             onDataUpdated: _updateTableData,
+                            onFilteredDataUpdated: _updateFilteredTableData,
+                            onPageChanged: (pageIndex, comparisonType) {
+                              // This will be handled by the pie charts
+                            },
                           ),
                         ),
                       ),
@@ -456,51 +462,15 @@ class _TemperatureStatsViewState extends State<_TemperatureStatsView> {
     });
   }
 
-  Map<String, dynamic> _getEvaluationConfig(int id) {
-    // Map evaluation IDs to colors and icons
-    // 1 = Tốt, 2 = Khá, 3 = Trung bình, 4 = Xấu
-    switch (id) {
-      case 1: // Tốt
-        return {'color': Colors.green, 'icon': Icons.check_circle, 'bgColor': Colors.green.shade50};
-      case 2: // Khá
-        return {
-          'color': Colors.lightGreen,
-          'icon': Icons.check_circle_outline,
-          'bgColor': Colors.lightGreen.shade50,
-        };
-      case 3: // Trung bình
-        return {
-          'color': Colors.orange,
-          'icon': Icons.warning_amber,
-          'bgColor': Colors.orange.shade50,
-        };
-      case 4: // Xấu
-        return {'color': Colors.red, 'icon': Icons.warning, 'bgColor': Colors.red.shade50};
-      default: // Không xác định
-        return {'color': Colors.grey, 'icon': Icons.info_outline, 'bgColor': Colors.grey.shade100};
-    }
+  void _updateFilteredTableData(List<Map<String, dynamic>> filteredData) {
+    setState(() {
+      _filteredTableData = filteredData;
+    });
   }
 
-  ThermalStatus _getStatusFromData(dynamic data) {
-    // Determine status based on comparison results
-    final envResult = data.dicThermalDataResults['Enviroment'];
-    if (envResult != null) {
-      final id = envResult.compareResultObject.id;
-      if (id == 4) return ThermalStatus.critical;
-      if (id == 3) return ThermalStatus.warning;
-    }
-    return ThermalStatus.normal;
-  }
-
-  Color _getStatusColor(ThermalStatus status) {
-    switch (status) {
-      case ThermalStatus.critical:
-        return Colors.red;
-      case ThermalStatus.warning:
-        return Colors.orange;
-      default:
-        return Colors.green;
-    }
+  List<Map<String, dynamic>> _getFilteredTableData() {
+    // Return the filtered data if available, otherwise return original data
+    return _filteredTableData.isNotEmpty ? _filteredTableData : _tableData;
   }
 }
 
@@ -510,12 +480,16 @@ class _TemperatureStatsTable extends StatefulWidget {
   final TemperatureStatsFilter filter;
   final Function(int evaluationId, String? comparisonType) onPieChartFilterApplied;
   final Function(List<Map<String, dynamic>>, List<Map<String, String>>)? onDataUpdated;
+  final Function(List<Map<String, dynamic>>)? onFilteredDataUpdated;
+  final Function(int pageIndex, String? comparisonType)? onPageChanged;
 
   const _TemperatureStatsTable({
     required this.devices,
     required this.filter,
     required this.onPieChartFilterApplied,
     this.onDataUpdated,
+    this.onFilteredDataUpdated,
+    this.onPageChanged,
   });
 
   @override
@@ -532,12 +506,22 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
   bool _isInitialLoad = true;
   List<Map<String, dynamic>> _cachedTableData = [];
   bool _hasLoggedInitialData = false;
+  int _currentPageIndex = 0; // 0 = Tổng hợp, 1+ = specific comparison type
+  String? _currentComparisonType; // null for tổng hợp
 
   @override
   void initState() {
     super.initState();
     _initializeThermalBlocs();
     _startAutoRefresh();
+  }
+
+  void _updatePageState(int pageIndex, String? comparisonType) {
+    print('🔄 Page changed: index=$pageIndex, comparisonType=$comparisonType');
+    setState(() {
+      _currentPageIndex = pageIndex;
+      _currentComparisonType = comparisonType;
+    });
   }
 
   void _initializeThermalBlocs() {
@@ -722,6 +706,11 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
     // Apply filters
     tableData = _applyFilters(tableData);
 
+    // Notify parent about filtered data
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onFilteredDataUpdated?.call(tableData);
+    });
+
     // Show loading indicator if we have no data and are loading
     if (tableData.isEmpty && hasAnyLoading && !hasAnyLoaded) {
       return Center(
@@ -825,6 +814,10 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
                   availableTypes: availableTypes, // Use original data
                   onFilterApplied: widget.onPieChartFilterApplied,
                   currentFilter: widget.filter,
+                  onPageChanged: (pageIndex, comparisonType) {
+                    // Update table state when page changes
+                    _updatePageState(pageIndex, comparisonType);
+                  },
                 ),
                 const SizedBox(height: AppSpacing.md),
                 // Temperature Table - fixed height
@@ -853,7 +846,12 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
 
   Widget _buildSfDataGridTable(List<Map<String, dynamic>> tableData) {
     final availableTypes = _getAvailableComparisonTypes(tableData);
-    final dataSource = UtilitiesDataSource(tableData, availableTypes);
+    final dataSource = UtilitiesDataSource(
+      tableData,
+      availableTypes,
+      _currentPageIndex,
+      _currentComparisonType,
+    );
 
     return SfDataGrid(
       source: dataSource,
@@ -870,37 +868,73 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
   }
 
   List<StackedHeaderRow> _buildStackedHeaders(List<Map<String, String>> availableTypes) {
-    return [
-      // First stacked header row - Main groups
-      StackedHeaderRow(
-        cells: [
-          // Điểm đo (rowspan 2)
-          StackedHeaderCell(
-            columnNames: ['pointName'],
-            child: Container(
-              padding: const EdgeInsets.all(8.0),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
-                border: Border(
-                  right: BorderSide(color: AppColors.border, width: 0.5),
-                  left: BorderSide(color: AppColors.primary, width: 2),
-                ),
-              ),
-              child: Text(
-                'Điểm đo',
-                style: AppTextStyles.bodySmall.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.primary,
-                  fontSize: 12,
-                ),
-                textAlign: TextAlign.center,
-              ),
+    final cells = <StackedHeaderCell>[];
+
+    // Điểm đo (always shown)
+    cells.add(
+      StackedHeaderCell(
+        columnNames: ['pointName'],
+        child: Container(
+          padding: const EdgeInsets.all(8.0),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.primary.withOpacity(0.1),
+            border: Border(
+              right: BorderSide(color: AppColors.border, width: 0.5),
+              left: BorderSide(color: AppColors.primary, width: 2),
             ),
           ),
-          // Thiết bị group (colspan 3)
-          StackedHeaderCell(
-            columnNames: ['max', 'min', 'avg'],
+          child: Text(
+            'Điểm đo',
+            style: AppTextStyles.bodySmall.copyWith(
+              fontWeight: FontWeight.w700,
+              color: AppColors.primary,
+              fontSize: 12,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ),
+    );
+
+    // Thiết bị group (always shown)
+    cells.add(
+      StackedHeaderCell(
+        columnNames: ['max', 'min', 'avg'],
+        child: Container(
+          padding: const EdgeInsets.all(8.0),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.secondary.withOpacity(0.08),
+            border: Border(
+              right: BorderSide(color: AppColors.border, width: 0.5),
+              bottom: BorderSide(color: AppColors.border, width: 0.5),
+            ),
+          ),
+          child: Text(
+            'Thiết bị',
+            style: AppTextStyles.bodyMedium.copyWith(
+              fontWeight: FontWeight.w700,
+              color: AppColors.secondary,
+              fontSize: 13,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ),
+    );
+
+    // Comparison type groups - show based on current page
+    if (_currentPageIndex == 0) {
+      // Tổng hợp - show all types
+      cells.addAll(
+        availableTypes.map(
+          (type) => StackedHeaderCell(
+            columnNames: [
+              '${type['key']!.toLowerCase()}Temp',
+              '${type['key']!.toLowerCase()}Delta',
+              '${type['key']!.toLowerCase()}Eval',
+            ],
             child: Container(
               padding: const EdgeInsets.all(8.0),
               alignment: Alignment.center,
@@ -912,7 +946,7 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
                 ),
               ),
               child: Text(
-                'Thiết bị',
+                type['displayName'] as String,
                 style: AppTextStyles.bodyMedium.copyWith(
                   fontWeight: FontWeight.w700,
                   color: AppColors.secondary,
@@ -922,45 +956,53 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
               ),
             ),
           ),
-          // Comparison type groups (colspan 3 each)
-          ...availableTypes.map(
-            (type) => StackedHeaderCell(
-              columnNames: [
-                '${type['key']!.toLowerCase()}Temp',
-                '${type['key']!.toLowerCase()}Delta',
-                '${type['key']!.toLowerCase()}Eval',
-              ],
-              child: Container(
-                padding: const EdgeInsets.all(8.0),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.secondary.withOpacity(0.08),
-                  border: Border(
-                    right: BorderSide(color: AppColors.border, width: 0.5),
-                    bottom: BorderSide(color: AppColors.border, width: 0.5),
-                  ),
-                ),
-                child: Text(
-                  type['displayName'] as String,
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.secondary,
-                    fontSize: 13,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
+        ),
+      );
+    } else if (_currentComparisonType != null) {
+      // Specific comparison type - show only that type
+      final type = availableTypes.firstWhere(
+        (t) => t['key']!.toLowerCase() == _currentComparisonType!.toLowerCase(),
+        orElse: () => {'key': _currentComparisonType!, 'displayName': _currentComparisonType!},
+      );
+
+      cells.add(
+        StackedHeaderCell(
+          columnNames: [
+            '${type['key']!.toLowerCase()}Temp',
+            '${type['key']!.toLowerCase()}Delta',
+            '${type['key']!.toLowerCase()}Eval',
+          ],
+          child: Container(
+            padding: const EdgeInsets.all(8.0),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.secondary.withOpacity(0.08),
+              border: Border(
+                right: BorderSide(color: AppColors.border, width: 0.5),
+                bottom: BorderSide(color: AppColors.border, width: 0.5),
               ),
             ),
+            child: Text(
+              type['displayName'] as String,
+              style: AppTextStyles.bodyMedium.copyWith(
+                fontWeight: FontWeight.w700,
+                color: AppColors.secondary,
+                fontSize: 13,
+              ),
+              textAlign: TextAlign.center,
+            ),
           ),
-        ],
-      ),
-    ];
+        ),
+      );
+    }
+
+    return [StackedHeaderRow(cells: cells)];
   }
 
   List<GridColumn> _buildSyncfusionColumns(List<Map<String, String>> availableTypes) {
     final columns = <GridColumn>[];
 
-    // Cột đầu tiên - Điểm đo (frozen) - Label sẽ được hiển thị trong stacked header
+    // Cột đầu tiên - Điểm đo (frozen) - always shown
     columns.add(
       GridColumn(
         columnName: 'pointName',
@@ -988,6 +1030,7 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
       ),
     );
 
+    // Thiết bị columns - always shown
     // Cột Max
     columns.add(
       GridColumn(
@@ -996,24 +1039,14 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
         label: Container(
           padding: const EdgeInsets.all(8.0),
           alignment: Alignment.center,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.trending_up, size: 16, color: AppColors.secondary),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  'Max (°C)',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.secondary,
-                    fontSize: 12,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
+          child: Text(
+            'Max (°C)',
+            style: AppTextStyles.bodySmall.copyWith(
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFFD32F2F),
+              fontSize: 12,
+            ),
+            textAlign: TextAlign.center,
           ),
         ),
       ),
@@ -1027,24 +1060,14 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
         label: Container(
           padding: const EdgeInsets.all(8.0),
           alignment: Alignment.center,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.trending_down, size: 16, color: AppColors.secondary),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  'Min (°C)',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.secondary,
-                    fontSize: 12,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
+          child: Text(
+            'Min (°C)',
+            style: AppTextStyles.bodySmall.copyWith(
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF1976D2),
+              fontSize: 12,
+            ),
+            textAlign: TextAlign.center,
           ),
         ),
       ),
@@ -1058,128 +1081,106 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
         label: Container(
           padding: const EdgeInsets.all(8.0),
           alignment: Alignment.center,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.show_chart, size: 16, color: AppColors.secondary),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  'AVG (°C)',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.secondary,
-                    fontSize: 12,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
+          child: Text(
+            'AVG (°C)',
+            style: AppTextStyles.bodySmall.copyWith(
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF757575),
+              fontSize: 12,
+            ),
+            textAlign: TextAlign.center,
           ),
         ),
       ),
     );
 
-    // Các cột comparison types (3 cột cho mỗi type: Nhiệt độ, Chênh lệch, Đánh giá)
-    for (final type in availableTypes) {
-      final key = type['key']!;
-
-      // Nhiệt độ
-      columns.add(
-        GridColumn(
-          columnName: '${key.toLowerCase()}Temp',
-          width: 100.0,
-          label: Container(
-            padding: const EdgeInsets.all(8.0),
-            alignment: Alignment.center,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.thermostat, size: 16, color: AppColors.secondary),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    'Nhiệt độ',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.secondary,
-                      fontSize: 12,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-
-      // Chênh lệch
-      columns.add(
-        GridColumn(
-          columnName: '${key.toLowerCase()}Delta',
-          width: 100.0,
-          label: Container(
-            padding: const EdgeInsets.all(8.0),
-            alignment: Alignment.center,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.compare_arrows, size: 16, color: AppColors.secondary),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    'Chênh lệch',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.secondary,
-                      fontSize: 12,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-
-      // Đánh giá
-      columns.add(
-        GridColumn(
-          columnName: '${key.toLowerCase()}Eval',
-          width: 120.0,
-          label: Container(
-            padding: const EdgeInsets.all(8.0),
-            alignment: Alignment.center,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.assessment, size: 16, color: AppColors.secondary),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    'Đánh giá',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.secondary,
-                      fontSize: 12,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
+    // Comparison type columns - show based on current page
+    if (_currentPageIndex == 0) {
+      // Tổng hợp - show all types
+      for (final type in availableTypes) {
+        final key = type['key']!;
+        _addComparisonTypeColumns(columns, key);
+      }
+    } else if (_currentComparisonType != null) {
+      // Specific comparison type - show only that type
+      _addComparisonTypeColumns(columns, _currentComparisonType!);
     }
 
     return columns;
+  }
+
+  void _addComparisonTypeColumns(List<GridColumn> columns, String key) {
+    // Nhiệt độ
+    columns.add(
+      GridColumn(
+        columnName: '${key.toLowerCase()}Temp',
+        width: 100.0,
+        label: Container(
+          padding: const EdgeInsets.all(8.0),
+          alignment: Alignment.center,
+          child: GestureDetector(
+            onTap: () => _showColumnInfoPopup(context, 'Nhiệt độ', _getTemperatureDescription(key)),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.thermostat, size: 16, color: const Color(0xFFF57C00)),
+                const SizedBox(width: 2),
+                Icon(Icons.info_outline, size: 12, color: AppColors.textSecondary),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    // Chênh lệch
+    columns.add(
+      GridColumn(
+        columnName: '${key.toLowerCase()}Delta',
+        width: 100.0,
+        label: Container(
+          padding: const EdgeInsets.all(8.0),
+          alignment: Alignment.center,
+          child: GestureDetector(
+            onTap: () => _showColumnInfoPopup(context, 'Chênh lệch', _getDeltaDescription(key)),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.compare_arrows, size: 16, color: const Color(0xFF1976D2)),
+                const SizedBox(width: 2),
+                Icon(Icons.info_outline, size: 12, color: AppColors.textSecondary),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    // Đánh giá
+    columns.add(
+      GridColumn(
+        columnName: '${key.toLowerCase()}Eval',
+        width: 120.0,
+        label: Container(
+          padding: const EdgeInsets.all(8.0),
+          alignment: Alignment.center,
+          child: GestureDetector(
+            onTap: () => _showColumnInfoPopup(context, 'Đánh giá', _getEvaluationDescription(key)),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.assessment, size: 16, color: const Color(0xFF2E7D32)),
+                const SizedBox(width: 2),
+                Icon(Icons.info_outline, size: 12, color: AppColors.textSecondary),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   List<Map<String, String>> _getComparisonTypes() {
@@ -1192,6 +1193,106 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
       {'key': 'GlobalMinPhase', 'displayName': 'Pha min toàn trạm'},
       {'key': 'GlobalTwoArea', 'displayName': 'Phần tử cùng loại toàn trạm'},
     ];
+  }
+
+  void _showColumnInfoPopup(BuildContext context, String title, String description) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppBorderRadius.medium),
+          ),
+          title: Row(
+            children: [
+              Icon(Icons.info_outline, color: AppColors.info, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: AppTextStyles.bodyLarge.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            description,
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(
+                'Đóng',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.info,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  String _getTemperatureDescription(String comparisonType) {
+    switch (comparisonType.toLowerCase()) {
+      case 'enviroment':
+        return 'Nhiệt độ so sánh với nhiệt độ môi trường xung quanh';
+      case 'threshold':
+        return 'Nhiệt độ so sánh với ngưỡng nhiệt độ cho phép';
+      case 'minphase':
+        return 'Nhiệt độ so sánh với pha min của thiết bị';
+      case 'twoarea':
+        return 'Nhiệt độ so sánh với phần tử cùng loại trong khu vực';
+      case 'globalminphase':
+        return 'Nhiệt độ so sánh với pha min toàn trạm';
+      case 'globaltwoarea':
+        return 'Nhiệt độ so sánh với phần tử cùng loại toàn trạm';
+      default:
+        return 'Nhiệt độ so sánh với giá trị chuẩn';
+    }
+  }
+
+  String _getDeltaDescription(String comparisonType) {
+    switch (comparisonType.toLowerCase()) {
+      case 'enviroment':
+        return 'Chênh lệch nhiệt độ so với nhiệt độ môi trường xung quanh';
+      case 'threshold':
+        return 'Chênh lệch nhiệt độ so với ngưỡng nhiệt độ cho phép';
+      case 'minphase':
+        return 'Chênh lệch nhiệt độ so với pha min của thiết bị';
+      case 'twoarea':
+        return 'Chênh lệch nhiệt độ so với phần tử cùng loại trong khu vực';
+      case 'globalminphase':
+        return 'Chênh lệch nhiệt độ so với pha min toàn trạm';
+      case 'globaltwoarea':
+        return 'Chênh lệch nhiệt độ so với phần tử cùng loại toàn trạm';
+      default:
+        return 'Chênh lệch nhiệt độ so với giá trị chuẩn';
+    }
+  }
+
+  String _getEvaluationDescription(String comparisonType) {
+    switch (comparisonType.toLowerCase()) {
+      case 'enviroment':
+        return 'Đánh giá dựa trên so sánh với nhiệt độ môi trường:\n• Tốt: Chênh lệch < 5°C\n• Khá: Chênh lệch 5-10°C\n• Trung bình: Chênh lệch 10-15°C\n• Xấu: Chênh lệch > 15°C';
+      case 'threshold':
+        return 'Đánh giá dựa trên so sánh với ngưỡng nhiệt độ:\n• Tốt: Dưới ngưỡng cảnh báo\n• Khá: Gần ngưỡng cảnh báo\n• Trung bình: Vượt ngưỡng cảnh báo\n• Xấu: Vượt ngưỡng nguy hiểm';
+      case 'minphase':
+        return 'Đánh giá dựa trên so sánh với pha min thiết bị:\n• Tốt: Nhiệt độ ổn định\n• Khá: Có biến động nhỏ\n• Trung bình: Biến động trung bình\n• Xấu: Biến động lớn, không ổn định';
+      case 'twoarea':
+        return 'Đánh giá dựa trên so sánh với phần tử cùng loại:\n• Tốt: Nhiệt độ tương đồng\n• Khá: Chênh lệch nhỏ\n• Trung bình: Chênh lệch trung bình\n• Xấu: Chênh lệch lớn, bất thường';
+      case 'globalminphase':
+        return 'Đánh giá dựa trên so sánh với pha min toàn trạm:\n• Tốt: Nhiệt độ ổn định toàn trạm\n• Khá: Có biến động nhỏ\n• Trung bình: Biến động trung bình\n• Xấu: Biến động lớn, ảnh hưởng toàn trạm';
+      case 'globaltwoarea':
+        return 'Đánh giá dựa trên so sánh với phần tử cùng loại toàn trạm:\n• Tốt: Nhiệt độ tương đồng toàn trạm\n• Khá: Chênh lệch nhỏ\n• Trung bình: Chênh lệch trung bình\n• Xấu: Chênh lệch lớn, bất thường toàn trạm';
+      default:
+        return 'Kết quả đánh giá: Tốt, Khá, Trung bình, Xấu';
+    }
   }
 
   List<Map<String, String>> _getAvailableComparisonTypes(List<Map<String, dynamic>> tableData) {
@@ -1317,24 +1418,36 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
     // Map evaluation IDs to colors and icons
     // 1 = Tốt, 2 = Khá, 3 = Trung bình, 4 = Xấu
     switch (id) {
-      case 1: // Tốt
-        return {'color': Colors.green, 'icon': Icons.check_circle, 'bgColor': Colors.green.shade50};
-      case 2: // Khá
+      case 1: // Tốt - Xanh lá đậm
         return {
-          'color': Colors.lightGreen,
+          'color': const Color(0xFF2E7D32),
+          'icon': Icons.check_circle,
+          'bgColor': const Color(0xFFE8F5E8),
+        };
+      case 2: // Khá - Xanh dương
+        return {
+          'color': const Color(0xFF1976D2),
           'icon': Icons.check_circle_outline,
-          'bgColor': Colors.lightGreen.shade50,
+          'bgColor': const Color(0xFFE3F2FD),
         };
-      case 3: // Trung bình
+      case 3: // Trung bình - Cam
         return {
-          'color': Colors.orange,
+          'color': const Color(0xFFF57C00),
           'icon': Icons.warning_amber,
-          'bgColor': Colors.orange.shade50,
+          'bgColor': const Color(0xFFFFF3E0),
         };
-      case 4: // Xấu
-        return {'color': Colors.red, 'icon': Icons.warning, 'bgColor': Colors.red.shade50};
-      default: // Không xác định
-        return {'color': Colors.grey, 'icon': Icons.info_outline, 'bgColor': Colors.grey.shade100};
+      case 4: // Xấu - Đỏ
+        return {
+          'color': const Color(0xFFD32F2F),
+          'icon': Icons.warning,
+          'bgColor': const Color(0xFFFFEBEE),
+        };
+      default: // Không xác định - Xám
+        return {
+          'color': const Color(0xFF757575),
+          'icon': Icons.info_outline,
+          'bgColor': const Color(0xFFF5F5F5),
+        };
     }
   }
 
@@ -1376,16 +1489,16 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
       Color? targetColor;
       switch (widget.filter.evaluationId!) {
         case 1: // Tốt
-          targetColor = Colors.green;
+          targetColor = const Color(0xFF2E7D32);
           break;
         case 2: // Khá
-          targetColor = Colors.lightGreen;
+          targetColor = const Color(0xFF1976D2);
           break;
         case 3: // Trung bình
-          targetColor = Colors.orange;
+          targetColor = const Color(0xFFF57C00);
           break;
         case 4: // Xấu
-          targetColor = Colors.red;
+          targetColor = const Color(0xFFD32F2F);
           break;
       }
 
@@ -1481,8 +1594,8 @@ class _StatisticsCards extends StatelessWidget {
             value: '${statistics['maxTemp']}°C',
             subtitle: statistics['maxDevice'],
             icon: Icons.trending_up,
-            iconColor: Colors.red,
-            bgColor: Colors.red.shade50,
+            iconColor: const Color(0xFFD32F2F),
+            bgColor: const Color(0xFFFFEBEE),
           ),
           const SizedBox(height: AppSpacing.md),
           // Min Temperature
@@ -1491,8 +1604,8 @@ class _StatisticsCards extends StatelessWidget {
             value: '${statistics['minTemp']}°C',
             subtitle: statistics['minDevice'],
             icon: Icons.trending_down,
-            iconColor: Colors.green,
-            bgColor: Colors.green.shade50,
+            iconColor: const Color(0xFF2E7D32),
+            bgColor: const Color(0xFFE8F5E8),
           ),
         ],
       ),
@@ -1584,12 +1697,14 @@ class _ComparisonPieCharts extends StatefulWidget {
   final List<Map<String, String>> availableTypes;
   final Function(int evaluationId, String? comparisonType) onFilterApplied;
   final TemperatureStatsFilter currentFilter;
+  final Function(int pageIndex, String? comparisonType)? onPageChanged;
 
   const _ComparisonPieCharts({
     required this.tableData,
     required this.availableTypes,
     required this.onFilterApplied,
     required this.currentFilter,
+    this.onPageChanged,
   });
 
   @override
@@ -1637,13 +1752,13 @@ class _ComparisonPieChartsState extends State<_ComparisonPieCharts> {
           final color = config['color'];
           int evalId = 1;
 
-          if (color == Colors.red) {
+          if (color == const Color(0xFFD32F2F)) {
             evalId = 4; // Xấu (worst)
-          } else if (color == Colors.orange) {
+          } else if (color == const Color(0xFFF57C00)) {
             evalId = 3; // Trung bình
-          } else if (color == Colors.lightGreen) {
+          } else if (color == const Color(0xFF1976D2)) {
             evalId = 2; // Khá
-          } else if (color == Colors.green) {
+          } else if (color == const Color(0xFF2E7D32)) {
             evalId = 1; // Tốt (best)
           }
 
@@ -1678,13 +1793,13 @@ class _ComparisonPieChartsState extends State<_ComparisonPieCharts> {
 
       if (config != null) {
         final color = config['color'];
-        if (color == Colors.green) {
+        if (color == const Color(0xFF2E7D32)) {
           stats['good'] = (stats['good'] ?? 0) + 1;
-        } else if (color == Colors.lightGreen) {
+        } else if (color == const Color(0xFF1976D2)) {
           stats['fair'] = (stats['fair'] ?? 0) + 1;
-        } else if (color == Colors.orange) {
+        } else if (color == const Color(0xFFF57C00)) {
           stats['average'] = (stats['average'] ?? 0) + 1;
-        } else if (color == Colors.red) {
+        } else if (color == const Color(0xFFD32F2F)) {
           stats['bad'] = (stats['bad'] ?? 0) + 1;
         }
       }
@@ -1711,6 +1826,12 @@ class _ComparisonPieChartsState extends State<_ComparisonPieCharts> {
                 setState(() {
                   _currentPage = index;
                 });
+                // Notify parent about page change
+                String? comparisonType;
+                if (index > 0 && index <= widget.availableTypes.length) {
+                  comparisonType = widget.availableTypes[index - 1]['key'];
+                }
+                widget.onPageChanged?.call(index, comparisonType);
               },
               itemCount: totalPages,
               itemBuilder: (context, index) {
@@ -1805,7 +1926,7 @@ class _ComparisonPieChartsState extends State<_ComparisonPieCharts> {
                         _buildClickableLegendItem(
                           'Tốt',
                           stats['good'] ?? 0,
-                          Colors.green,
+                          const Color(0xFF2E7D32),
                           1,
                           comparisonTypeKey,
                         ),
@@ -1813,7 +1934,7 @@ class _ComparisonPieChartsState extends State<_ComparisonPieCharts> {
                         _buildClickableLegendItem(
                           'Khá',
                           stats['fair'] ?? 0,
-                          Colors.lightGreen,
+                          const Color(0xFF1976D2),
                           2,
                           comparisonTypeKey,
                         ),
@@ -1821,7 +1942,7 @@ class _ComparisonPieChartsState extends State<_ComparisonPieCharts> {
                         _buildClickableLegendItem(
                           'Trung bình',
                           stats['average'] ?? 0,
-                          Colors.orange,
+                          const Color(0xFFF57C00),
                           3,
                           comparisonTypeKey,
                         ),
@@ -1829,7 +1950,7 @@ class _ComparisonPieChartsState extends State<_ComparisonPieCharts> {
                         _buildClickableLegendItem(
                           'Xấu',
                           stats['bad'] ?? 0,
-                          Colors.red,
+                          const Color(0xFFD32F2F),
                           4,
                           comparisonTypeKey,
                         ),
@@ -1862,10 +1983,10 @@ class _ComparisonPieChartsState extends State<_ComparisonPieCharts> {
   List<PieChartSectionData> _buildPieChartSections(Map<String, int> stats) {
     final sections = <PieChartSectionData>[];
     final data = [
-      {'label': 'Tốt', 'value': stats['good'] ?? 0, 'color': Colors.green},
-      {'label': 'Khá', 'value': stats['fair'] ?? 0, 'color': Colors.lightGreen},
-      {'label': 'Trung bình', 'value': stats['average'] ?? 0, 'color': Colors.orange},
-      {'label': 'Xấu', 'value': stats['bad'] ?? 0, 'color': Colors.red},
+      {'label': 'Tốt', 'value': stats['good'] ?? 0, 'color': const Color(0xFF2E7D32)},
+      {'label': 'Khá', 'value': stats['fair'] ?? 0, 'color': const Color(0xFF1976D2)},
+      {'label': 'Trung bình', 'value': stats['average'] ?? 0, 'color': const Color(0xFFF57C00)},
+      {'label': 'Xấu', 'value': stats['bad'] ?? 0, 'color': const Color(0xFFD32F2F)},
     ];
 
     for (final item in data) {
@@ -2063,15 +2184,15 @@ class _FilterDialogState extends State<_FilterDialog> {
   Color _getColorForLevel(int id) {
     switch (id) {
       case 1: // Good - Tốt
-        return Colors.green;
+        return const Color(0xFF2E7D32);
       case 2: // Fair - Khá
-        return Colors.lightGreen;
+        return const Color(0xFF1976D2);
       case 3: // Average - Trung bình
-        return Colors.orange;
+        return const Color(0xFFF57C00);
       case 4: // Bad - Xấu
-        return Colors.red;
+        return const Color(0xFFD32F2F);
       default:
-        return Colors.grey;
+        return const Color(0xFF757575);
     }
   }
 
@@ -2573,19 +2694,26 @@ class _FilterDialogState extends State<_FilterDialog> {
 }
 
 class UtilitiesDataSource extends DataGridSource {
-  UtilitiesDataSource(this.tableData, this.availableTypes) {
+  UtilitiesDataSource(
+    this.tableData,
+    this.availableTypes,
+    this.currentPageIndex,
+    this.currentComparisonType,
+  ) {
     _buildDataGridRows();
   }
 
   final List<Map<String, dynamic>> tableData;
   final List<Map<String, String>> availableTypes;
+  final int currentPageIndex;
+  final String? currentComparisonType;
   List<DataGridRow> _dataGridRows = [];
 
   void _buildDataGridRows() {
     _dataGridRows = tableData.map<DataGridRow>((data) {
       final cells = <DataGridCell>[];
 
-      // Cột đầu tiên - Điểm đo
+      // Cột đầu tiên - Điểm đo (always shown)
       cells.add(
         DataGridCell<String>(
           columnName: 'pointName',
@@ -2593,6 +2721,7 @@ class UtilitiesDataSource extends DataGridSource {
         ),
       );
 
+      // Thiết bị columns (always shown)
       // Cột Max
       cells.add(DataGridCell<String>(columnName: 'max', value: data['max'] ?? '-'));
 
@@ -2602,10 +2731,34 @@ class UtilitiesDataSource extends DataGridSource {
       // Cột AVG
       cells.add(DataGridCell<String>(columnName: 'avg', value: data['avg'] ?? '-'));
 
-      // Các cột comparison types
-      for (final type in availableTypes) {
-        final key = type['key']!;
-        final lowerKey = key.toLowerCase();
+      // Comparison type columns - only add cells for visible columns
+      if (currentPageIndex == 0) {
+        // Tổng hợp - show all types
+        for (final type in availableTypes) {
+          final key = type['key']!;
+          final lowerKey = key.toLowerCase();
+          cells.add(
+            DataGridCell<String>(
+              columnName: '${lowerKey}Temp',
+              value: data['${lowerKey}Temp']?.toString() ?? '-',
+            ),
+          );
+          cells.add(
+            DataGridCell<String>(
+              columnName: '${lowerKey}Delta',
+              value: data['${lowerKey}Delta']?.toString() ?? '-',
+            ),
+          );
+          cells.add(
+            DataGridCell<String>(
+              columnName: '${lowerKey}Eval',
+              value: data['${lowerKey}Eval']?.toString() ?? '-',
+            ),
+          );
+        }
+      } else if (currentComparisonType != null) {
+        // Specific comparison type - show only that type
+        final lowerKey = currentComparisonType!.toLowerCase();
         cells.add(
           DataGridCell<String>(
             columnName: '${lowerKey}Temp',
@@ -2695,12 +2848,12 @@ class UtilitiesDataSource extends DataGridSource {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Icon(Icons.trending_up, size: 14, color: Colors.red),
+            Icon(Icons.trending_up, size: 14, color: const Color(0xFFD32F2F)),
             const SizedBox(width: 3),
             Text(
               value,
               style: AppTextStyles.bodySmall.copyWith(
-                color: Colors.red,
+                color: const Color(0xFFD32F2F),
                 fontWeight: FontWeight.w600,
                 fontSize: 12,
               ),
@@ -2714,12 +2867,12 @@ class UtilitiesDataSource extends DataGridSource {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Icon(Icons.trending_down, size: 14, color: Colors.blue),
+            Icon(Icons.trending_down, size: 14, color: const Color(0xFF1976D2)),
             const SizedBox(width: 3),
             Text(
               value,
               style: AppTextStyles.bodySmall.copyWith(
-                color: Colors.blue,
+                color: const Color(0xFF1976D2),
                 fontWeight: FontWeight.w600,
                 fontSize: 12,
               ),
@@ -2773,7 +2926,7 @@ class UtilitiesDataSource extends DataGridSource {
 
     final deltaValue = double.tryParse(delta.toString()) ?? 0;
     final isPositive = deltaValue > 0;
-    final color = isPositive ? Colors.red : Colors.blue;
+    final color = isPositive ? const Color(0xFFD32F2F) : const Color(0xFF1976D2);
 
     return Text(
       '${isPositive ? '+' : ''}$delta',
@@ -2797,28 +2950,24 @@ class UtilitiesDataSource extends DataGridSource {
 
     // Tìm config từ row data
     Map<String, dynamic>? config;
-    for (final cell in row.getCells()) {
-      final columnName = cell.columnName;
-      if (columnName.endsWith('Config')) {
-        final evalColumnName = columnName.replaceAll('Config', 'Eval');
-        final evalCell = row.getCells().firstWhere(
-          (c) => c.columnName == evalColumnName,
-          orElse: () => DataGridCell<String>(columnName: '', value: ''),
-        );
-        if (evalCell.value.toString() == text) {
-          // Tìm config tương ứng trong tableData
-          final rowIndex = _dataGridRows.indexOf(row);
-          if (rowIndex >= 0 && rowIndex < tableData.length) {
-            final rowData = tableData[rowIndex];
-            config = rowData[columnName] as Map<String, dynamic>?;
-            break;
-          }
+    final rowIndex = _dataGridRows.indexOf(row);
+    if (rowIndex >= 0 && rowIndex < tableData.length) {
+      final rowData = tableData[rowIndex];
+
+      // Tìm config cho column hiện tại
+      for (final cell in row.getCells()) {
+        final columnName = cell.columnName;
+        if (columnName.endsWith('Eval') && cell.value.toString() == text) {
+          // Tìm config tương ứng
+          final configKey = columnName.replaceAll('Eval', 'Config');
+          config = rowData[configKey] as Map<String, dynamic>?;
+          if (config != null) break;
         }
       }
     }
 
-    // Fallback config nếu không tìm thấy
-    config ??= {'bgColor': Colors.grey.shade100, 'color': Colors.grey, 'icon': Icons.help};
+    // Fallback config nếu không tìm thấy - sử dụng màu sắc mới
+    config ??= _getEvaluationConfigFromText(text);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
@@ -2846,5 +2995,41 @@ class UtilitiesDataSource extends DataGridSource {
         ],
       ),
     );
+  }
+
+  // Helper method để lấy config từ text evaluation
+  Map<String, dynamic> _getEvaluationConfigFromText(String text) {
+    switch (text.toLowerCase()) {
+      case 'tốt':
+        return {
+          'color': const Color(0xFF2E7D32),
+          'icon': Icons.check_circle,
+          'bgColor': const Color(0xFFE8F5E8),
+        };
+      case 'khá':
+        return {
+          'color': const Color(0xFF1976D2),
+          'icon': Icons.check_circle_outline,
+          'bgColor': const Color(0xFFE3F2FD),
+        };
+      case 'trung bình':
+        return {
+          'color': const Color(0xFFF57C00),
+          'icon': Icons.warning_amber,
+          'bgColor': const Color(0xFFFFF3E0),
+        };
+      case 'xấu':
+        return {
+          'color': const Color(0xFFD32F2F),
+          'icon': Icons.warning,
+          'bgColor': const Color(0xFFFFEBEE),
+        };
+      default:
+        return {
+          'color': const Color(0xFF757575),
+          'icon': Icons.info_outline,
+          'bgColor': const Color(0xFFF5F5F5),
+        };
+    }
   }
 }
