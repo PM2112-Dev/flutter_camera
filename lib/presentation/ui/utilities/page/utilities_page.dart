@@ -919,13 +919,9 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
                       borderRadius: BorderRadius.circular(AppBorderRadius.medium),
                       border: Border.all(color: AppColors.border, width: 0.5),
                     ),
-                    child: Column(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(AppBorderRadius.small),
-                          child: _buildSfDataGridTable(tableData),
-                        ),
-                      ],
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(AppBorderRadius.small),
+                      child: _buildSfDataGridTable(tableData),
                     ),
                   ),
                 ),
