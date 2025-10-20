@@ -1115,20 +1115,29 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
       GridColumn(
         columnName: '${key.toLowerCase()}Temp',
         width: 100.0,
-        label: Container(
-          padding: const EdgeInsets.all(8.0),
-          alignment: Alignment.center,
-          child: GestureDetector(
-            onTap: () => _showColumnInfoPopup(context, 'Nhiệt độ', _getTemperatureDescription(key)),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.thermostat, size: 16, color: const Color(0xFFF57C00)),
-                const SizedBox(width: 2),
-                Icon(Icons.info_outline, size: 12, color: AppColors.textSecondary),
-              ],
-            ),
+        label: InkWell(
+          onTap: () => _showColumnInfoPopup(context, 'Nhiệt độ', _getTemperatureDescription(key)),
+          child: Stack(
+            children: [
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                mainAxisSize: MainAxisSize.max,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.max,
+                    children: [Icon(Icons.thermostat, size: 16, color: const Color(0xFFF57C00))],
+                  ),
+                ],
+              ),
+              Positioned(
+                top: 4,
+                right: 4,
+                child: Icon(Icons.info_outline, size: 12, color: AppColors.textSecondary),
+              ),
+            ],
           ),
         ),
       ),
@@ -1139,20 +1148,31 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
       GridColumn(
         columnName: '${key.toLowerCase()}Delta',
         width: 100.0,
-        label: Container(
-          padding: const EdgeInsets.all(8.0),
-          alignment: Alignment.center,
-          child: GestureDetector(
-            onTap: () => _showColumnInfoPopup(context, 'Chênh lệch', _getDeltaDescription(key)),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.compare_arrows, size: 16, color: const Color(0xFF1976D2)),
-                const SizedBox(width: 2),
-                Icon(Icons.info_outline, size: 12, color: AppColors.textSecondary),
-              ],
-            ),
+        label: InkWell(
+          onTap: () => _showColumnInfoPopup(context, 'Chênh lệch', _getDeltaDescription(key)),
+          child: Stack(
+            children: [
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                mainAxisSize: MainAxisSize.max,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.max,
+                    children: [
+                      Icon(Icons.compare_arrows, size: 16, color: const Color(0xFF1976D2)),
+                    ],
+                  ),
+                ],
+              ),
+              Positioned(
+                top: 4,
+                right: 4,
+                child: Icon(Icons.info_outline, size: 12, color: AppColors.textSecondary),
+              ),
+            ],
           ),
         ),
       ),
@@ -1163,20 +1183,29 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
       GridColumn(
         columnName: '${key.toLowerCase()}Eval',
         width: 120.0,
-        label: Container(
-          padding: const EdgeInsets.all(8.0),
-          alignment: Alignment.center,
-          child: GestureDetector(
-            onTap: () => _showColumnInfoPopup(context, 'Đánh giá', _getEvaluationDescription(key)),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.assessment, size: 16, color: const Color(0xFF2E7D32)),
-                const SizedBox(width: 2),
-                Icon(Icons.info_outline, size: 12, color: AppColors.textSecondary),
-              ],
-            ),
+        label: InkWell(
+          onTap: () => _showColumnInfoPopup(context, 'Đánh giá', _getEvaluationDescription(key)),
+          child: Stack(
+            children: [
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                mainAxisSize: MainAxisSize.max,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.max,
+                    children: [Icon(Icons.assessment, size: 16, color: const Color(0xFF2E7D32))],
+                  ),
+                ],
+              ),
+              Positioned(
+                top: 4,
+                right: 4,
+                child: Icon(Icons.info_outline, size: 12, color: AppColors.textSecondary),
+              ),
+            ],
           ),
         ),
       ),
@@ -1241,32 +1270,32 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
   String _getTemperatureDescription(String comparisonType) {
     switch (comparisonType.toLowerCase()) {
       case 'enviroment':
-        return 'Nhiệt độ so sánh với nhiệt độ môi trường xung quanh';
+        return 'Chênh lệch nhiệt độ so với môi trường';
       case 'threshold':
-        return 'Nhiệt độ so sánh với ngưỡng nhiệt độ cho phép';
+        return 'Chênh lệch nhiệt độ so với ngưỡng nhiệt độ';
       case 'minphase':
-        return 'Nhiệt độ so sánh với pha min của thiết bị';
+        return 'Chênh lệch nhiệt độ so với pha min';
       case 'twoarea':
-        return 'Nhiệt độ so sánh với phần tử cùng loại trong khu vực';
+        return 'Chênh lệch nhiệt độ so với phần tử cùng loại';
       case 'globalminphase':
-        return 'Nhiệt độ so sánh với pha min toàn trạm';
+        return 'Chênh lệch nhiệt độ so với pha min toàn trạm';
       case 'globaltwoarea':
-        return 'Nhiệt độ so sánh với phần tử cùng loại toàn trạm';
+        return 'Chênh lệch nhiệt độ so với phần tử cùng loại toàn trạm';
       default:
-        return 'Nhiệt độ so sánh với giá trị chuẩn';
+        return 'Chênh lệch nhiệt độ so với giá trị chuẩn';
     }
   }
 
   String _getDeltaDescription(String comparisonType) {
     switch (comparisonType.toLowerCase()) {
       case 'enviroment':
-        return 'Chênh lệch nhiệt độ so với nhiệt độ môi trường xung quanh';
+        return 'Chênh lệch nhiệt độ so với môi trường';
       case 'threshold':
-        return 'Chênh lệch nhiệt độ so với ngưỡng nhiệt độ cho phép';
+        return 'Chênh lệch nhiệt độ so với ngưỡng nhiệt độ';
       case 'minphase':
-        return 'Chênh lệch nhiệt độ so với pha min của thiết bị';
+        return 'Chênh lệch nhiệt độ so với pha min';
       case 'twoarea':
-        return 'Chênh lệch nhiệt độ so với phần tử cùng loại trong khu vực';
+        return 'Chênh lệch nhiệt độ so với phần tử cùng loại';
       case 'globalminphase':
         return 'Chênh lệch nhiệt độ so với pha min toàn trạm';
       case 'globaltwoarea':
@@ -1279,19 +1308,19 @@ class _TemperatureStatsTableState extends State<_TemperatureStatsTable> {
   String _getEvaluationDescription(String comparisonType) {
     switch (comparisonType.toLowerCase()) {
       case 'enviroment':
-        return 'Đánh giá dựa trên so sánh với nhiệt độ môi trường:\n• Tốt: Chênh lệch < 5°C\n• Khá: Chênh lệch 5-10°C\n• Trung bình: Chênh lệch 10-15°C\n• Xấu: Chênh lệch > 15°C';
+        return 'Đánh giá dựa trên so sánh với nhiệt độ môi trường';
       case 'threshold':
-        return 'Đánh giá dựa trên so sánh với ngưỡng nhiệt độ:\n• Tốt: Dưới ngưỡng cảnh báo\n• Khá: Gần ngưỡng cảnh báo\n• Trung bình: Vượt ngưỡng cảnh báo\n• Xấu: Vượt ngưỡng nguy hiểm';
+        return 'Đánh giá dựa trên so sánh với ngưỡng nhiệt độ';
       case 'minphase':
-        return 'Đánh giá dựa trên so sánh với pha min thiết bị:\n• Tốt: Nhiệt độ ổn định\n• Khá: Có biến động nhỏ\n• Trung bình: Biến động trung bình\n• Xấu: Biến động lớn, không ổn định';
+        return 'Đánh giá dựa trên so sánh với pha min';
       case 'twoarea':
-        return 'Đánh giá dựa trên so sánh với phần tử cùng loại:\n• Tốt: Nhiệt độ tương đồng\n• Khá: Chênh lệch nhỏ\n• Trung bình: Chênh lệch trung bình\n• Xấu: Chênh lệch lớn, bất thường';
+        return 'Đánh giá dựa trên so sánh với phần tử cùng loại';
       case 'globalminphase':
-        return 'Đánh giá dựa trên so sánh với pha min toàn trạm:\n• Tốt: Nhiệt độ ổn định toàn trạm\n• Khá: Có biến động nhỏ\n• Trung bình: Biến động trung bình\n• Xấu: Biến động lớn, ảnh hưởng toàn trạm';
+        return 'Đánh giá dựa trên so sánh với pha min toàn trạm';
       case 'globaltwoarea':
-        return 'Đánh giá dựa trên so sánh với phần tử cùng loại toàn trạm:\n• Tốt: Nhiệt độ tương đồng toàn trạm\n• Khá: Chênh lệch nhỏ\n• Trung bình: Chênh lệch trung bình\n• Xấu: Chênh lệch lớn, bất thường toàn trạm';
+        return 'Đánh giá dựa trên so sánh với phần tử cùng loại toàn trạm';
       default:
-        return 'Kết quả đánh giá: Tốt, Khá, Trung bình, Xấu';
+        return 'Đánh giá dựa trên so sánh với giá trị chuẩn';
     }
   }
 
