@@ -15,7 +15,7 @@ class RealTimeThermalApiService {
   String get _baseUrl {
     final dynamicUrl = authLocalPreference.getFullBaseUrl();
     return dynamicUrl.isNotEmpty ? dynamicUrl : '${UrlConstants.baseUrl}:10253';
-  }
+  } 
 
   Future<ApiResponse<RealTimeThermalDataResponseModel>> getRealTimeThermalData({
     required int machineId,

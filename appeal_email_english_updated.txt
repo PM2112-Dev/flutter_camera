@@ -1,0 +1,117 @@
+Subject: Developer Account Suspension Appeal - Request for Opportunity to Fix MTKVision Application
+
+Dear Google Play Policy Team,
+
+I am writing to appeal the suspension of my developer account due to "High Risk Behavior" policy violations. After careful review, I realize that my application may have several issues that need to be addressed, and I sincerely apologize for these oversights.
+
+ACCOUNT INFORMATION:
+- Application Name: MTKVision (flutter_camera)
+- Application ID: com.example.thermal_app
+- Suspension Reason: High Risk Behavior
+
+ACKNOWLEDGMENT AND EXPLANATION:
+
+1. Issues I have identified:
+• Using applicationId "com.example.thermal_app" - this is unprofessional and may appear suspicious
+• Having test_api.dart file with multiple debug print() statements that could be considered unsafe
+• Using usesCleartextTraffic="true" in AndroidManifest without clear justification
+• Package name "com.example.flutter_camera" in Kotlin files resembles demo applications
+• Lack of comprehensive Privacy Policy and documentation
+
+2. Legitimate Purpose of the Application:
+MTKVision is an official thermal camera monitoring application developed for MTK Technology company to:
+• Monitor thermal cameras in industrial environments
+• Manage company security camera systems
+• Receive notifications from monitoring systems
+
+3. About the New Account:
+This is our company's first time publishing an application on Google Play. Due to inexperience, we made several mistakes during development and did not fully comply with best practices.
+
+COMMITMENT TO REMEDIATION:
+
+If given the opportunity, I commit to implementing the following changes:
+
+1. Immediate Changes:
+• Change applicationId to "com.mtktech.thermalvision"
+• Remove all unnecessary debug code and test files
+• Update package names to official company naming
+• Create detailed Privacy Policy and Terms of Service
+• Add proper documentation and README
+
+2. Security Improvements:
+• Remove usesCleartextTraffic or provide clear justification for its use
+• Implement proper network security configuration
+• Add certificate pinning for server connections
+• Improve permission handling with clear rationale
+
+3. Policy Compliance:
+• Create official website for company and application
+• Provide complete contact information and support
+• Implement proper user consent mechanisms
+• Ensure data handling compliance with regulations
+
+REQUEST:
+
+I respectfully request the Google Play Policy Team to:
+
+1. Grant me the opportunity to fix the mistakes made instead of permanent account suspension
+2. Provide specific guidance on points that need to be addressed
+3. Allow me to resubmit the application after complete remediation
+4. If necessary, I am willing to undergo a more rigorous review process
+
+EDUCATIONAL NATURE:
+
+I understand that this suspension is an important lesson. As a new developer on Google Play, I did not invest sufficient time to learn and fully comply with all policies. I commit to:
+
+• Learning and strictly adhering to all Google Play policies
+• Taking courses on Android security best practices
+• Implementing proper testing and code review processes
+• Maintaining high standards for all future applications
+
+CONTACT INFORMATION:
+- Email: [your email]
+- Company: MTK Technology
+- Phone: [your phone number]
+- Website: [company website if available]
+
+SUPPORTING DOCUMENTATION:
+I am ready to provide:
+- MTK Technology business license
+- Employment contract or development authorization
+- Detailed plan for addressing identified issues
+- Specific timeline for application updates
+
+I sincerely thank the Google Play Policy Team for taking the time to review this appeal. I hope to be given the opportunity to prove that I can develop applications that fully comply with policies and contribute positively to the Google Play ecosystem.
+
+DETAILED REMEDIATION PLAN:
+
+Technical Fixes (Week 1):
+1. Update all package names and applicationId
+2. Remove debug code and test files
+3. Implement proper network security
+4. Add comprehensive error handling
+5. Create proper app signing configuration
+
+Documentation (Week 2):
+1. Create Privacy Policy and Terms of Service
+2. Develop user manual and FAQ
+3. Set up official company website
+4. Prepare support documentation
+5. Create compliance checklist
+
+Testing and Validation (Week 3):
+1. Comprehensive security testing
+2. Policy compliance verification
+3. User acceptance testing
+4. Performance optimization
+5. Final review and submission
+
+I understand that policy violations are serious, and I do not expect leniency. However, I hope for the opportunity to learn and improve, rather than being permanently denied the chance to develop on the Google Play platform.
+
+Sincerely,
+[Your Name]
+[Your Position at Company]
+MTK Technology
+
+P.S: I recognize the severity of policy violations and do not expect special treatment. However, I hope for the chance to demonstrate growth and learning, which I believe aligns with Google's mission to support developer education and improvement.
+

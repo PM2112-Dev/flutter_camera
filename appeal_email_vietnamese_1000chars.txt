@@ -1,0 +1,37 @@
+Chủ đề: Kháng cáo đình chỉ tài khoản - MTKVision
+
+Kính gửi Google Play Team,
+
+Tôi kháng cáo đình chỉ tài khoản vì "High Risk Behavior". Thừa nhận lỗi và xin lỗi.
+
+THÔNG TIN:
+- App: MTKVision (camera giám sát nhiệt)
+- ID: com.mtktech.thermal_app
+
+LỖI NHẬN RA:
+• File test_api.dart có debug code
+• usesCleartextTraffic="true" không giải thích
+• Thiếu Privacy Policy
+
+MỤC ĐÍCH: MTKVision giám sát camera nhiệt cho MTK Technology.
+
+CAM KẾT SỬA:
+• Xóa debug code
+• Tạo Privacy Policy
+• Bỏ usesCleartextTraffic
+• Cải thiện bảo mật
+
+YÊU CẦU:
+1. Cơ hội sửa thay vì đình chỉ vĩnh viễn
+2. Hướng dẫn cụ thể
+3. Cho phép resubmit
+
+Developer mới, thiếu hiểu biết chính sách. Cam kết học và tuân thủ nghiêm ngặt.
+
+LIÊN HỆ:
+Email: [email]
+Công ty: MTK Technology
+
+Cảm ơn.
+
+MTK Tech Team

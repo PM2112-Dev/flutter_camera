@@ -315,4 +315,4 @@ class ComparationThermalDataModel {
       comparationDataTime: comparationDataTime,
     );
   }
-}
+} 

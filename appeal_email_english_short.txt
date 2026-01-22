@@ -1,0 +1,71 @@
+Subject: Developer Account Suspension Appeal - MTKVision
+
+Dear Google Play Team,
+
+I am writing to appeal my developer account suspension for "High Risk Behavior" policy violations. I acknowledge my mistakes and sincerely apologize for these oversights.
+
+ACCOUNT INFORMATION:
+- Application: MTKVision (industrial thermal camera monitoring)
+- Application ID: com.mtktech.thermal_app
+- Suspension Reason: High Risk Behavior
+
+ACKNOWLEDGMENT OF ISSUES:
+
+Problems I have identified:
+• test_api.dart file containing unsafe debug code
+• Using usesCleartextTraffic="true" without proper justification
+• Missing Privacy Policy and documentation
+
+APPLICATION PURPOSE:
+MTKVision is an official application by MTK Technology for monitoring thermal cameras in industrial environments and managing security systems.
+
+REMEDIATION COMMITMENT:
+
+1. Immediate Changes:
+• Remove all debug code and test files
+• Create detailed Privacy Policy
+• Update package names to official company naming
+
+2. Security Improvements:
+• Remove usesCleartextTraffic
+• Implement network security config
+• Improve permission handling
+
+3. Policy Compliance:
+• Provide complete contact information
+• Implement user consent mechanisms
+• Ensure compliant data handling
+
+REQUEST:
+
+I respectfully request Google Play Team to:
+1. Grant opportunity to fix issues instead of permanent suspension
+2. Provide specific guidance on required fixes
+3. Allow resubmission after remediation
+4. Accept stricter review process if needed
+
+LEARNING COMMITMENT:
+
+As a new Google Play developer, I lacked proper policy understanding. I commit to:
+• Learn and strictly follow Google Play policies
+• Take Android security best practices courses
+• Implement proper testing and code review
+• Maintain high standards for future applications
+
+CONTACT INFORMATION:
+- Email: [your email]
+- Company: MTK Technology
+- Phone: [your phone]
+
+I sincerely thank you and hope for the opportunity to prove my ability to develop policy-compliant applications that contribute positively to Google Play.
+
+Sincerely,
+MTK Tech Team
+
+P.S: I understand policy violations are serious. I don't expect leniency, only hope for a chance to learn and improve.
+
+
+
+
+
+

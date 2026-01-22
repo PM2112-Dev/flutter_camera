@@ -1,0 +1,45 @@
+Subject: Developer Account Suspension Appeal - MTKVision
+
+Dear Google Play Team,
+
+I appeal my account suspension for "High Risk Behavior". I acknowledge mistakes and apologize.
+
+INFO:
+- App: MTKVision (thermal camera monitoring)
+- ID: com.mtktech.thermal_app
+
+IDENTIFIED ISSUES:
+• test_api.dart file with debug code
+• usesCleartextTraffic="true" without justification
+• Missing Privacy Policy
+
+PURPOSE: MTKVision monitors industrial thermal cameras for MTK Technology.
+
+FIXES COMMITTED:
+• Remove debug code
+• Create Privacy Policy
+• Remove usesCleartextTraffic
+• Improve security
+
+REQUEST:
+1. Chance to fix instead of permanent suspension
+2. Specific guidance
+3. Allow resubmission
+
+As new developer, I lacked policy knowledge. Commit to learn and comply strictly.
+
+CONTACT:
+Email: [email]
+Company: MTK Technology
+Phone: [phone]
+
+Thank you for consideration.
+
+Sincerely,
+MTK Tech Team
+
+
+
+
+
+
